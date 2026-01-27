@@ -678,6 +678,67 @@ main {
     margin-top: 16px;
 }
 
+.manage-cars-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+}
+
+.manage-cars-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.manage-cars-empty {
+    font-size: 0.9rem;
+    color: #9ca3af;
+}
+
+.manage-car-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-radius: 16px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    box-shadow:
+        0 10px 25px rgba(15, 23, 42, 0.85),
+        0 0 0 1px rgba(15, 23, 42, 0.9);
+}
+
+.manage-car-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.manage-car-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #e5ecff;
+}
+
+.manage-car-subtitle {
+    font-size: 0.8rem;
+    color: #cbd5fe;
+}
+
+.manage-car-side {
+    font-size: 0.8rem;
+    color: #cbd5fe;
+}
+
+.manage-car-chip {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(248, 250, 252, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.5);
+}
+
 .car-display-card {
     padding: 28px 26px;
     background: rgba(15, 23, 42, 0.4);
@@ -855,60 +916,78 @@ main {
     width: 100%;
 }
 
-.availability-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9rem;
+/* Card-style availability list (like Live Test Drives) */
+.availability-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
-.availability-table thead {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(10px);
+.availability-date-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-.availability-table th {
-    padding: 12px 10px;
-    text-align: left;
+.availability-date-header {
+    align-self: flex-start;
+    padding: 4px 14px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.18);
+    color: #e5ecff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.availability-card {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    box-shadow:
+        0 10px 26px rgba(15, 23, 42, 0.8),
+        0 0 0 1px rgba(15, 23, 42, 0.8);
+}
+
+.availability-card-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.availability-car-name {
     font-weight: 600;
     color: #e5ecff;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    border-bottom: 2px solid rgba(148, 163, 184, 0.3);
+    font-size: 0.95rem;
 }
 
-.availability-table td {
-    padding: 10px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+.availability-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.8rem;
     color: #cbd5fe;
 }
 
-.availability-table tbody tr {
-    transition: background 0.2s ease;
+.availability-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.availability-table tbody tr:hover {
-    background: rgba(37, 99, 235, 0.1);
+.availability-meta-label {
+    opacity: 0.8;
 }
 
-.date-group-header {
-    background: rgba(37, 99, 235, 0.2) !important;
-    font-weight: 700;
-    color: #e5ecff;
-    font-size: 0.95rem;
-    text-transform: capitalize;
-}
-
-.date-group-header:hover {
-    background: rgba(37, 99, 235, 0.25) !important;
-}
-
-.car-name-cell {
-    font-weight: 600;
-    color: #e5ecff;
+.availability-card-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .slots-container {
@@ -922,6 +1001,7 @@ main {
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: 500;
+    white-space: nowrap;
 }
 
 .slot-badge.booked {
@@ -934,6 +1014,44 @@ main {
     background: rgba(34, 197, 94, 0.15);
     border: 1px solid rgba(34, 197, 94, 0.3);
     color: #86efac;
+}
+
+.slot-consultant {
+    font-size: 0.75rem;
+    opacity: 0.85;
+}
+
+.availability-tag {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    font-size: 0.8rem;
+    color: #bfdbfe;
+}
+
+.btn-end-td {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: none;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-end-td:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(250, 204, 21, 0.45);
+    background: #fde68a;
+}
+
+.btn-end-td:active {
+    transform: translateY(0);
+    box-shadow: 0 3px 8px rgba(250, 204, 21, 0.4);
 }
 
 .table-loading,

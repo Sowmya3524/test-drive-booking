@@ -148,6 +148,7 @@ async function loadCars() {
         
         if (carsData.length === 0) {
             carSelect.innerHTML = '<option value="">No cars available. Please add cars in Supabase.</option>';
+            renderManageCarsList();
             return;
         }
         
@@ -161,6 +162,9 @@ async function loadCars() {
         });
         
         console.log(`✅ Loaded ${carsData.length} cars successfully`);
+
+        // Also render list in Manage Cars page
+        renderManageCarsList();
     } catch (err) {
         console.error('Error loading cars:', err);
         
@@ -185,6 +189,39 @@ async function loadCars() {
             supabaseUrl: SUPABASE_URL
         });
     }
+}
+
+// Render stacked list of cars in Manage Cars page
+function renderManageCarsList() {
+    const listEl = document.getElementById('manageCarsList');
+    if (!listEl) return;
+
+    if (!carsData || carsData.length === 0) {
+        listEl.innerHTML = '<p class="manage-cars-empty">No cars in inventory yet. Add a car above to get started.</p>';
+        return;
+    }
+
+    listEl.innerHTML = '';
+
+    carsData.forEach((car, index) => {
+        const card = document.createElement('div');
+        card.className = 'manage-car-card';
+
+        const title = `${car.car_make || ''} ${car.car_model || ''}`.trim() || 'Unnamed car';
+        const year = car.year_of_manufacture ? ` • ${car.year_of_manufacture}` : '';
+
+        card.innerHTML = `
+            <div class="manage-car-main">
+                <div class="manage-car-title">${title}${year}</div>
+                <div class="manage-car-subtitle">Variant: ${car.car_variant || '-'}</div>
+            </div>
+            <div class="manage-car-side">
+                <span class="manage-car-chip">Car #${index + 1}</span>
+            </div>
+        `;
+
+        listEl.appendChild(card);
+    });
 }
 
 // Update hidden car_id field and car display
@@ -249,10 +286,10 @@ async function loadAvailabilityTable() {
     emptyEl.style.display = 'none';
 
     try {
-        // Fetch all bookings with car details (only future dates)
+        // Fetch all upcoming bookings with car details (live test drives list)
         const today = new Date().toISOString().split('T')[0];
         const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/bookings?booking_date=gte.${today}&select=id,booking_date,time_slot,consultant_name,car_id,cars!inner(car_make,car_model,car_variant)&order=booking_date,car_id`,
+            `${SUPABASE_URL}/rest/v1/bookings?booking_date=gte.${today}&select=id,booking_date,time_slot,consultant_name,test_drive_type,customer_location,car_id,cars!inner(car_make,car_model,car_variant)&order=booking_date,time_slot,car_id`,
             {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -267,64 +304,11 @@ async function loadAvailabilityTable() {
 
         const bookings = await response.json();
 
-        // Also fetch all cars to show cars with no bookings
-        const carsResponse = await fetch(
-            `${SUPABASE_URL}/rest/v1/cars?select=id,car_make,car_model,car_variant&order=car_make,car_model`,
-            {
-                headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-                }
-            }
-        );
-
-        if (!carsResponse.ok) {
-            throw new Error('Failed to fetch cars');
-        }
-
-        const allCars = await carsResponse.json();
-
-        // Process bookings: group by date, then by car
-        const groupedData = {};
-        const todayDate = new Date();
-        todayDate.setHours(0, 0, 0, 0);
-
-        // Initialize with all cars for next 30 days
-        for (let i = 0; i < 30; i++) {
-            const date = new Date(todayDate);
-            date.setDate(todayDate.getDate() + i);
-            const dateStr = date.toISOString().split('T')[0];
-            groupedData[dateStr] = {};
-            
-            allCars.forEach(car => {
-                groupedData[dateStr][car.id] = {
-                    car: car,
-                    // bookedSlots: record of slot -> consultant name
-                    bookedSlots: {}
-                };
-            });
-        }
-
-        // Process bookings
-        bookings.forEach(booking => {
-            if (booking.cars && booking.booking_date && booking.time_slot) {
-                const dateStr = booking.booking_date;
-                const carId = booking.car_id;
-                const slot = booking.time_slot;
-                const consultant = booking.consultant_name || '—';
-
-                if (groupedData[dateStr] && groupedData[dateStr][carId]) {
-                    // For each car/date, store which consultant owns each slot
-                    groupedData[dateStr][carId].bookedSlots[slot] = consultant;
-                }
-            }
-        });
-
-        // Render table
-        renderAvailabilityTable(groupedData, allCars);
+        // Render card-style list
+        renderAvailabilityTable(bookings);
 
         loadingEl.style.display = 'none';
-        if (Object.keys(groupedData).length === 0 || bookings.length === 0) {
+        if (!bookings || bookings.length === 0) {
             emptyEl.style.display = 'block';
         } else {
             contentEl.style.display = 'block';
@@ -337,33 +321,29 @@ async function loadAvailabilityTable() {
     }
 }
 
-// Render availability table
-function renderAvailabilityTable(groupedData, allCars) {
+// Render availability as card-style list (similar to "Live Test Drives")
+function renderAvailabilityTable(bookings) {
     const contentEl = document.getElementById('availabilityTableContent');
     if (!contentEl) return;
 
-    const table = document.createElement('table');
-    table.className = 'availability-table';
-    
-    // Table header
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-        <tr>
-            <th style="width: 35%;">Car</th>
-            <th style="width: 25%;">Date</th>
-            <th style="width: 40%;">Time Slots</th>
-        </tr>
-    `;
-    table.appendChild(thead);
+    if (!bookings || bookings.length === 0) {
+        contentEl.innerHTML = '';
+        return;
+    }
 
-    // Table body
-    const tbody = document.createElement('tbody');
-    
-    // Sort dates
-    const sortedDates = Object.keys(groupedData).sort();
+    const listContainer = document.createElement('div');
+    listContainer.className = 'availability-list';
 
-    sortedDates.forEach(dateStr => {
-        const date = new Date(dateStr);
+    // Create cards: one per booking (TD), with serial numbers TD #1, TD #2, ...
+    bookings.forEach((booking, index) => {
+        if (!booking.cars) return;
+
+        const car = booking.cars;
+        const carName = `${car.car_make} ${car.car_model} (${car.car_variant})`;
+        const consultant = booking.consultant_name || '—';
+        const typeLabel = booking.test_drive_type === 'home' ? 'Home Test Drive' : 'Branch Test Drive';
+
+        const date = new Date(booking.booking_date);
         const dateFormatted = date.toLocaleDateString('en-IN', {
             weekday: 'short',
             day: '2-digit',
@@ -371,71 +351,89 @@ function renderAvailabilityTable(groupedData, allCars) {
             year: 'numeric'
         });
 
-        const carsForDate = groupedData[dateStr];
-        let hasBookings = false;
+        const tdNumber = `TD #${index + 1}`;
 
-        // Check if any car has FUTURE bookings on this date (ignore past slots for "real-time" view)
-        Object.values(carsForDate).forEach(carData => {
-            const uniqueBooked = Object.keys(carData.bookedSlots);
-            const futureBooked = uniqueBooked.filter(slot => !isSlotInPast(dateStr, slot));
-            if (futureBooked.length > 0) {
-                hasBookings = true;
+        const card = document.createElement('div');
+        card.className = 'availability-card';
+        card.innerHTML = `
+            <div class="availability-card-left">
+                <div class="availability-car-name">${tdNumber}</div>
+                <div class="availability-meta">
+                    <span class="availability-meta-item">
+                        <span class="availability-meta-label">Car:</span>
+                        <span>${carName}</span>
+                    </span>
+                </div>
+                <div class="availability-meta">
+                    <span class="availability-meta-item">
+                        <span class="availability-meta-label">Date:</span>
+                        <span>${dateFormatted}</span>
+                    </span>
+                    <span class="availability-meta-item">
+                        <span class="availability-meta-label">Slot:</span>
+                        <span>${booking.time_slot}</span>
+                    </span>
+                </div>
+                <div class="availability-meta">
+                    <span class="availability-meta-item">
+                        <span class="availability-meta-label">Consultant:</span>
+                        <span>${consultant}</span>
+                    </span>
+                    ${booking.customer_location ? `<span class="availability-meta-item"><span class="availability-meta-label">Location:</span><span>${booking.customer_location}</span></span>` : ''}
+                </div>
+            </div>
+            <div class="availability-card-right">
+                <div class="availability-tag">${typeLabel}</div>
+                <button type="button" class="btn-end-td" data-booking-id="${booking.id}">End TD</button>
+            </div>
+        `;
+
+        listContainer.appendChild(card);
+    });
+
+    contentEl.innerHTML = '';
+    contentEl.appendChild(listContainer);
+
+    // Wire up End TD buttons
+    document.querySelectorAll('.btn-end-td').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-booking-id');
+            if (id) {
+                endTestDrive(Number(id));
+            }
+        });
+    });
+}
+
+// End a test drive (delete booking)
+async function endTestDrive(bookingId) {
+    if (!bookingId) return;
+
+    const confirmed = window.confirm('Are you sure you want to end this test drive?');
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`, {
+            method: 'DELETE',
+            headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             }
         });
 
-        // Only show dates that have bookings
-        if (!hasBookings) return;
+        if (!res.ok) {
+            const text = await res.text();
+            console.error('Error ending test drive:', text);
+            alert('Could not end this test drive. Please check console for details (RLS policy might block DELETE).');
+            return;
+        }
 
-        // Date group header
-        const dateRow = document.createElement('tr');
-        dateRow.className = 'date-group-header';
-        dateRow.innerHTML = `
-            <td colspan="3">${dateFormatted}</td>
-        `;
-        tbody.appendChild(dateRow);
-
-        // Car rows for this date
-        Object.values(carsForDate).forEach(carData => {
-            const bookedMap = carData.bookedSlots;
-            const allBookedSlots = Object.keys(bookedMap);
-            if (allBookedSlots.length === 0) return; // Skip cars with no bookings at all
-
-            const car = carData.car;
-            const carName = `${car.car_make} ${car.car_model} (${car.car_variant})`;
-
-            // Remove past slots for display
-            const bookedSlots = allBookedSlots.filter(slot => !isSlotInPast(dateStr, slot));
-
-            // If no future booked slots for this car on this date, skip row
-            if (bookedSlots.length === 0) return;
-
-            // Available slots are those not booked and not in the past
-            const availableSlots = ALL_TIME_SLOTS.filter(slot => 
-                !bookedSlots.includes(slot) && !isSlotInPast(dateStr, slot)
-            );
-
-            const carRow = document.createElement('tr');
-            carRow.innerHTML = `
-                <td class="car-name-cell">${carName}</td>
-                <td>${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
-                <td>
-                    <div class="slots-container">
-                        ${bookedSlots.map(slot => 
-                            `<span class="slot-badge booked">${slot} <span style="font-size:0.75rem;opacity:0.85;">(${bookedMap[slot]})</span></span>`
-                        ).join('')}
-                        ${availableSlots.map(slot => 
-                            `<span class="slot-badge available">${slot}</span>`
-                        ).join('')}
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(carRow);
-        });
-    });
-
-    table.appendChild(tbody);
-    contentEl.innerHTML = '';
-    contentEl.appendChild(table);
+        alert('Test drive ended.');
+        loadAvailabilityTable();
+    } catch (err) {
+        console.error('Unexpected error ending test drive:', err);
+        alert('Unexpected error while ending test drive. Please try again.');
+    }
 }
 
 // -----------------------------
