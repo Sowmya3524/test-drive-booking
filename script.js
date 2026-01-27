@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
     initializeEventListeners();
     setupHyderabadLocationSuggestions();
     loadCars(); // Load cars from Supabase
+    loadAvailabilityTable(); // Load availability table
 });
 
 // Initialize all event listeners
@@ -59,6 +60,12 @@ async function loadCars() {
     if (!carSelect) return;
 
     try {
+        // Check if URL is valid
+        if (!SUPABASE_URL || SUPABASE_URL.includes('TODO') || SUPABASE_URL.includes('your-project')) {
+            carSelect.innerHTML = '<option value="">⚠️ Supabase URL not configured. Please update SUPABASE_URL in script.js</option>';
+            return;
+        }
+
         // Try with explicit schema first
         const response = await fetch(`${SUPABASE_URL}/rest/v1/cars?select=*&order=car_make,car_model`, {
             headers: {
@@ -103,24 +110,307 @@ async function loadCars() {
         carsData.forEach(car => {
             const option = document.createElement('option');
             option.value = car.id;
-            option.textContent = `${car.car_make} ${car.car_model} (${car.car_variant}) - ${car.year_of_manufacture}`;
+            option.textContent = `${car.car_make} ${car.car_model} (${car.car_variant})`;
             carSelect.appendChild(option);
         });
         
         console.log(`✅ Loaded ${carsData.length} cars successfully`);
     } catch (err) {
         console.error('Error loading cars:', err);
-        carSelect.innerHTML = '<option value="">❌ Error loading cars. Open browser console (F12) for details.</option>';
+        
+        // Check for specific error types
+        if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+            if (err.message.includes('ERR_NAME_NOT_RESOLVED') || err.message.includes('network')) {
+                carSelect.innerHTML = '<option value="">⚠️ Network error: Cannot reach Supabase. Check: 1) Internet connection 2) Supabase URL is correct 3) No firewall blocking</option>';
+            } else {
+                carSelect.innerHTML = '<option value="">⚠️ Connection failed. Check internet connection and Supabase URL.</option>';
+            }
+        } else if (err.message && err.message.includes('CORS')) {
+            carSelect.innerHTML = '<option value="">⚠️ CORS error: Check Supabase project settings and allowed origins.</option>';
+        } else {
+            carSelect.innerHTML = '<option value="">❌ Error loading cars. Open browser console (F12) for details.</option>';
+        }
+        
+        // Log detailed error for debugging
+        console.error('Full error details:', {
+            name: err.name,
+            message: err.message,
+            stack: err.stack,
+            supabaseUrl: SUPABASE_URL
+        });
     }
 }
 
-// Update hidden car_id field
+// Update hidden car_id field and car display
 function updateCarId() {
     const selectedCar = document.getElementById('selectedCar');
     const carIdInput = document.getElementById('carId');
     if (selectedCar && carIdInput) {
         carIdInput.value = selectedCar.value || '';
+        updateCarDisplay(selectedCar.value);
     }
+}
+
+// Update car display on right side
+function updateCarDisplay(carId) {
+    const carInfoMake = document.getElementById('carInfoMake');
+    const carInfoModel = document.getElementById('carInfoModel');
+    const carInfoVariant = document.getElementById('carInfoVariant');
+    const carImagePlaceholder = document.getElementById('carDisplayImage');
+
+    if (!carId || carId === '') {
+        // Reset to placeholder
+        if (carInfoMake) carInfoMake.textContent = '—';
+        if (carInfoModel) carInfoModel.textContent = '—';
+        if (carInfoVariant) carInfoVariant.textContent = '—';
+        if (carImagePlaceholder) {
+            carImagePlaceholder.innerHTML = `
+                <svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="200" height="120" rx="12" fill="rgba(148, 163, 184, 0.1)"/>
+                    <path d="M50 80 L150 80 L140 60 L110 50 L90 50 L60 60 Z" stroke="rgba(148, 163, 184, 0.3)" stroke-width="2" fill="none"/>
+                    <circle cx="60" cy="80" r="8" fill="rgba(148, 163, 184, 0.2)"/>
+                    <circle cx="140" cy="80" r="8" fill="rgba(148, 163, 184, 0.2)"/>
+                </svg>
+                <p class="car-placeholder-text">Select a car to view details</p>
+            `;
+        }
+        return;
+    }
+
+    // Find the selected car from carsData
+    const selectedCarData = carsData.find(car => car.id === Number(carId));
+    
+    if (selectedCarData) {
+        if (carInfoMake) carInfoMake.textContent = selectedCarData.car_make;
+        if (carInfoModel) carInfoModel.textContent = selectedCarData.car_model;
+        if (carInfoVariant) carInfoVariant.textContent = selectedCarData.car_variant;
+        
+        // Update image placeholder with car name and better SVG
+        if (carImagePlaceholder) {
+            carImagePlaceholder.innerHTML = `
+                <div style="width: 100%; height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(56, 189, 248, 0.2)); border-radius: 16px; position: relative; overflow: hidden;">
+                    <svg width="100%" height="140" viewBox="0 0 300 140" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                        <!-- Car body -->
+                        <path d="M60 100 L240 100 L230 75 L200 65 L100 65 L70 75 Z" 
+                              stroke="rgba(96, 165, 250, 0.8)" 
+                              stroke-width="3" 
+                              fill="rgba(96, 165, 250, 0.15)"/>
+                        <!-- Windshield -->
+                        <path d="M100 65 L200 65 L195 55 L105 55 Z" 
+                              stroke="rgba(96, 165, 250, 0.6)" 
+                              stroke-width="2" 
+                              fill="rgba(148, 163, 184, 0.1)"/>
+                        <!-- Wheels -->
+                        <circle cx="80" cy="100" r="12" fill="rgba(15, 23, 42, 0.6)" stroke="rgba(96, 165, 250, 0.5)" stroke-width="2"/>
+                        <circle cx="80" cy="100" r="6" fill="rgba(96, 165, 250, 0.4)"/>
+                        <circle cx="220" cy="100" r="12" fill="rgba(15, 23, 42, 0.6)" stroke="rgba(96, 165, 250, 0.5)" stroke-width="2"/>
+                        <circle cx="220" cy="100" r="6" fill="rgba(96, 165, 250, 0.4)"/>
+                        <!-- Headlights -->
+                        <circle cx="240" cy="85" r="4" fill="rgba(255, 255, 255, 0.8)"/>
+                        <circle cx="60" cy="85" r="4" fill="rgba(255, 255, 255, 0.6)"/>
+                    </svg>
+                    <p style="margin-top: 8px; font-size: 1.1rem; color: #e5ecff; font-weight: 700; text-align: center; position: relative; z-index: 1; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);">
+                        ${selectedCarData.car_make} ${selectedCarData.car_model}
+                    </p>
+                    <p style="font-size: 0.85rem; color: #9ca3af; position: relative; z-index: 1; margin-top: 4px;">
+                        ${selectedCarData.car_variant}
+                    </p>
+                </div>
+            `;
+        }
+    }
+}
+
+// -----------------------------
+// Availability Table - Show booked time slots by date and car
+// -----------------------------
+
+// All possible time slots
+const ALL_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'];
+
+// Load and render availability table
+async function loadAvailabilityTable() {
+    const loadingEl = document.getElementById('availabilityTableLoading');
+    const contentEl = document.getElementById('availabilityTableContent');
+    const emptyEl = document.getElementById('availabilityTableEmpty');
+
+    if (!loadingEl || !contentEl || !emptyEl) return;
+
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    emptyEl.style.display = 'none';
+
+    try {
+        // Fetch all bookings with car details (only future dates)
+        const today = new Date().toISOString().split('T')[0];
+        const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/bookings?booking_date=gte.${today}&select=id,booking_date,time_slot,car_id,cars!inner(car_make,car_model,car_variant)&order=booking_date,car_id`,
+            {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch bookings');
+        }
+
+        const bookings = await response.json();
+
+        // Also fetch all cars to show cars with no bookings
+        const carsResponse = await fetch(
+            `${SUPABASE_URL}/rest/v1/cars?select=id,car_make,car_model,car_variant&order=car_make,car_model`,
+            {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            }
+        );
+
+        if (!carsResponse.ok) {
+            throw new Error('Failed to fetch cars');
+        }
+
+        const allCars = await carsResponse.json();
+
+        // Process bookings: group by date, then by car
+        const groupedData = {};
+        const todayDate = new Date();
+        todayDate.setHours(0, 0, 0, 0);
+
+        // Initialize with all cars for next 30 days
+        for (let i = 0; i < 30; i++) {
+            const date = new Date(todayDate);
+            date.setDate(todayDate.getDate() + i);
+            const dateStr = date.toISOString().split('T')[0];
+            groupedData[dateStr] = {};
+            
+            allCars.forEach(car => {
+                groupedData[dateStr][car.id] = {
+                    car: car,
+                    bookedSlots: []
+                };
+            });
+        }
+
+        // Process bookings
+        bookings.forEach(booking => {
+            if (booking.cars && booking.booking_date && booking.time_slot) {
+                const dateStr = booking.booking_date;
+                const carId = booking.car_id;
+
+                if (groupedData[dateStr] && groupedData[dateStr][carId]) {
+                    groupedData[dateStr][carId].bookedSlots.push(booking.time_slot);
+                }
+            }
+        });
+
+        // Render table
+        renderAvailabilityTable(groupedData, allCars);
+
+        loadingEl.style.display = 'none';
+        if (Object.keys(groupedData).length === 0 || bookings.length === 0) {
+            emptyEl.style.display = 'block';
+        } else {
+            contentEl.style.display = 'block';
+        }
+    } catch (err) {
+        console.error('Error loading availability table:', err);
+        loadingEl.style.display = 'none';
+        contentEl.innerHTML = '<p style="color: #fca5a5; text-align: center; padding: 20px;">Error loading availability. Please refresh.</p>';
+        contentEl.style.display = 'block';
+    }
+}
+
+// Render availability table
+function renderAvailabilityTable(groupedData, allCars) {
+    const contentEl = document.getElementById('availabilityTableContent');
+    if (!contentEl) return;
+
+    const table = document.createElement('table');
+    table.className = 'availability-table';
+    
+    // Table header
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr>
+            <th style="width: 35%;">Car</th>
+            <th style="width: 25%;">Date</th>
+            <th style="width: 40%;">Time Slots</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+
+    // Table body
+    const tbody = document.createElement('tbody');
+    
+    // Sort dates
+    const sortedDates = Object.keys(groupedData).sort();
+
+    sortedDates.forEach(dateStr => {
+        const date = new Date(dateStr);
+        const dateFormatted = date.toLocaleDateString('en-IN', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+
+        const carsForDate = groupedData[dateStr];
+        let hasBookings = false;
+
+        // Check if any car has bookings on this date
+        Object.values(carsForDate).forEach(carData => {
+            if (carData.bookedSlots.length > 0) {
+                hasBookings = true;
+            }
+        });
+
+        // Only show dates that have bookings
+        if (!hasBookings) return;
+
+        // Date group header
+        const dateRow = document.createElement('tr');
+        dateRow.className = 'date-group-header';
+        dateRow.innerHTML = `
+            <td colspan="3">${dateFormatted}</td>
+        `;
+        tbody.appendChild(dateRow);
+
+        // Car rows for this date
+        Object.values(carsForDate).forEach(carData => {
+            if (carData.bookedSlots.length === 0) return; // Skip cars with no bookings
+
+            const car = carData.car;
+            const carName = `${car.car_make} ${car.car_model} (${car.car_variant})`;
+            const bookedSlots = carData.bookedSlots;
+            const availableSlots = ALL_TIME_SLOTS.filter(slot => !bookedSlots.includes(slot));
+
+            const carRow = document.createElement('tr');
+            carRow.innerHTML = `
+                <td class="car-name-cell">${carName}</td>
+                <td>${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
+                <td>
+                    <div class="slots-container">
+                        ${bookedSlots.map(slot => 
+                            `<span class="slot-badge booked">${slot}</span>`
+                        ).join('')}
+                        ${availableSlots.map(slot => 
+                            `<span class="slot-badge available">${slot}</span>`
+                        ).join('')}
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(carRow);
+        });
+    });
+
+    table.appendChild(tbody);
+    contentEl.innerHTML = '';
+    contentEl.appendChild(table);
 }
 
 // -----------------------------
@@ -561,6 +851,18 @@ async function submitBooking() {
         }
     }
 
+    // Collect year of manufacture
+    const yearSelect = document.getElementById('yearOfManufacture');
+    const yearOtherInput = document.getElementById('yearOfManufactureOther');
+    let yearValue = '';
+    if (yearSelect) {
+        if (yearSelect.value === 'other' && yearOtherInput) {
+            yearValue = yearOtherInput.value;
+        } else {
+            yearValue = yearSelect.value;
+        }
+    }
+
     // Prepare payload for Supabase
     const booking = {
         customer_name: document.getElementById('customerName').value,
@@ -571,7 +873,8 @@ async function submitBooking() {
         time_slot: timeSlotVal,
         test_drive_type: document.querySelector('input[name="testDriveType"]:checked').value,
         car_id: Number(carId),
-        kilometers: Number(document.getElementById('kilometers').value) || null
+        kilometers: Number(document.getElementById('kilometers').value) || null,
+        year_of_manufacture: yearValue
     };
 
     // Send booking to Supabase REST API
@@ -600,6 +903,14 @@ async function submitBooking() {
             document.getElementById('scheduleDisplayText').textContent = 'Select schedule';
             document.getElementById('selectedCar').value = '';
             document.getElementById('carId').value = '';
+            if (yearOtherInput) {
+                yearOtherInput.style.display = 'none';
+                yearOtherInput.required = false;
+            }
+            // Reset car display
+            updateCarDisplay('');
+            // Refresh availability table
+            loadAvailabilityTable();
         })
         .catch((err) => {
             console.error('Error saving to Supabase:', err);
