@@ -6,6 +6,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 document.addEventListener('DOMContentLoaded', function () {
     initializeEventListeners();
     setupHyderabadLocationSuggestions();
+    loadCars(); // Load cars from Supabase
 });
 
 // Initialize all event listeners
@@ -34,6 +35,92 @@ function initializeEventListeners() {
 
     // Schedule modal behaviour
     setupScheduleModal();
+
+    // Car selection change - update availability
+    const selectedCar = document.getElementById('selectedCar');
+    if (selectedCar) {
+        selectedCar.addEventListener('change', function() {
+            updateCarId();
+            // If date is already selected, refresh availability
+            const dateInput = document.getElementById('scheduleDateInput');
+            if (dateInput && dateInput.value) {
+                checkAvailability();
+            }
+        });
+    }
+}
+
+// Store cars data globally
+let carsData = [];
+
+// Load cars from Supabase
+async function loadCars() {
+    const carSelect = document.getElementById('selectedCar');
+    if (!carSelect) return;
+
+    try {
+        // Try with explicit schema first
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/cars?select=*&order=car_make,car_model`, {
+            headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Supabase API Error:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText,
+                url: `${SUPABASE_URL}/rest/v1/cars`
+            });
+            
+            if (response.status === 404) {
+                carSelect.innerHTML = '<option value="">⚠️ Table not found. Check: 1) Table name is "cars" 2) Table is in "public" schema 3) RLS policy allows SELECT</option>';
+                return;
+            }
+            
+            if (response.status === 401 || response.status === 403) {
+                carSelect.innerHTML = '<option value="">⚠️ Permission denied. Check RLS policy "allow_select_cars_for_anon" exists.</option>';
+                return;
+            }
+            
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        carsData = await response.json();
+        
+        if (carsData.length === 0) {
+            carSelect.innerHTML = '<option value="">No cars available. Please add cars in Supabase.</option>';
+            return;
+        }
+        
+        // Populate dropdown
+        carSelect.innerHTML = '<option value="">Select a car</option>';
+        carsData.forEach(car => {
+            const option = document.createElement('option');
+            option.value = car.id;
+            option.textContent = `${car.car_make} ${car.car_model} (${car.car_variant}) - ${car.year_of_manufacture}`;
+            carSelect.appendChild(option);
+        });
+        
+        console.log(`✅ Loaded ${carsData.length} cars successfully`);
+    } catch (err) {
+        console.error('Error loading cars:', err);
+        carSelect.innerHTML = '<option value="">❌ Error loading cars. Open browser console (F12) for details.</option>';
+    }
+}
+
+// Update hidden car_id field
+function updateCarId() {
+    const selectedCar = document.getElementById('selectedCar');
+    const carIdInput = document.getElementById('carId');
+    if (selectedCar && carIdInput) {
+        carIdInput.value = selectedCar.value || '';
+    }
 }
 
 // -----------------------------
@@ -238,7 +325,16 @@ function setupScheduleModal() {
     }
 
     function openModal() {
+        const carId = document.getElementById('carId').value;
+        if (!carId) {
+            alert('Please select a car first before choosing a schedule.');
+            return;
+        }
         modal.classList.remove('hidden');
+        // Check availability if date is already set
+        if (dateInput.value) {
+            checkAvailability();
+        }
     }
 
     function closeModal() {
@@ -279,6 +375,7 @@ function setupScheduleModal() {
 
             if (mode === 'today') {
                 setToday(dateInput);
+                checkAvailability();
             } else if (mode === 'tomorrow') {
                 const today = new Date();
                 const tomorrow = new Date(today);
@@ -289,12 +386,16 @@ function setupScheduleModal() {
                 const tomorrowStr = `${yyyy}-${mm}-${dd}`;
                 dateInput.value = tomorrowStr;
                 dateInput.min = new Date().toISOString().split('T')[0];
+                checkAvailability();
             } else {
                 // custom: just focus the date input
                 dateInput.focus();
             }
         });
     });
+
+    // Check availability when date changes
+    dateInput.addEventListener('change', checkAvailability);
 
     // Time chips
     timeChips.forEach(chip => {
@@ -306,11 +407,11 @@ function setupScheduleModal() {
 
     confirmBtn.addEventListener('click', () => {
         const dateVal = dateInput.value;
-        const selectedTimeChip = Array.from(timeChips).find(c => c.classList.contains('chip-selected'));
+        const selectedTimeChip = Array.from(timeChips).find(c => c.classList.contains('chip-selected') && !c.disabled);
         const timeSlotVal = selectedTimeChip ? selectedTimeChip.getAttribute('data-time-slot') : '';
 
         if (!dateVal || !timeSlotVal) {
-            alert('Please select both date and time.');
+            alert('Please select both date and an available time slot.');
             return;
         }
 
@@ -335,8 +436,73 @@ function setupScheduleModal() {
     });
 }
 
+// Check availability for selected car and date
+async function checkAvailability() {
+    const carId = document.getElementById('carId').value;
+    const dateInput = document.getElementById('scheduleDateInput');
+    const selectedDate = dateInput ? dateInput.value : '';
+
+    if (!carId || !selectedDate) {
+        // Reset all time chips to enabled if no car/date selected
+        document.querySelectorAll('.chip-time').forEach(chip => {
+            chip.disabled = false;
+            chip.classList.remove('chip-booked');
+            chip.title = '';
+        });
+        return;
+    }
+
+    try {
+        // Fetch existing bookings for this car and date
+        const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/bookings?car_id=eq.${carId}&booking_date=eq.${selectedDate}&select=time_slot`,
+            {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            }
+        );
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Availability check error:', {
+                status: response.status,
+                error: errorText,
+                url: `${SUPABASE_URL}/rest/v1/bookings?car_id=eq.${carId}&booking_date=eq.${selectedDate}`
+            });
+            throw new Error(`Failed to check availability: ${errorText}`);
+        }
+
+        const bookings = await response.json();
+        const bookedSlots = bookings.map(b => b.time_slot);
+
+        // Update time chips
+        document.querySelectorAll('.chip-time').forEach(chip => {
+            const slot = chip.getAttribute('data-time-slot');
+            if (bookedSlots.includes(slot)) {
+                chip.disabled = true;
+                chip.classList.add('chip-booked');
+                chip.classList.remove('chip-selected');
+                chip.title = 'This slot is already booked';
+            } else {
+                chip.disabled = false;
+                chip.classList.remove('chip-booked');
+                chip.title = '';
+            }
+        });
+    } catch (err) {
+        console.error('Error checking availability:', err);
+        // On error, enable all slots (fail open)
+        document.querySelectorAll('.chip-time').forEach(chip => {
+            chip.disabled = false;
+            chip.classList.remove('chip-booked');
+        });
+    }
+}
+
 // Submit booking
-function submitBooking() {
+async function submitBooking() {
     // Validate customer form (HTML5 required fields)
     const customerForm = document.getElementById('customerForm');
     if (!customerForm.checkValidity()) {
@@ -347,20 +513,51 @@ function submitBooking() {
     // Extra validation for schedule (because hidden inputs are not required in HTML)
     const bookingDateVal = document.getElementById('bookingDate').value;
     const timeSlotVal = document.getElementById('timeSlot').value;
+    const carId = document.getElementById('carId').value;
+    
     if (!bookingDateVal || !timeSlotVal) {
         alert('Please select schedule (date and time) before submitting.');
         return;
     }
-    
-    // Collect all form data
-    const yearSelect = document.getElementById('yearOfManufacture');
-    const yearOtherInput = document.getElementById('yearOfManufactureOther');
-    let yearValue = '';
-    if (yearSelect) {
-        if (yearSelect.value === 'other' && yearOtherInput) {
-            yearValue = yearOtherInput.value;
-        } else {
-            yearValue = yearSelect.value;
+
+    if (!carId) {
+        alert('Please select a car before submitting.');
+        return;
+    }
+
+    // Check for double booking before submitting
+    try {
+        const conflictCheck = await fetch(
+            `${SUPABASE_URL}/rest/v1/bookings?car_id=eq.${carId}&booking_date=eq.${bookingDateVal}&time_slot=eq.${encodeURIComponent(timeSlotVal)}&select=id`,
+            {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            }
+        );
+
+        if (!conflictCheck.ok) {
+            const errorText = await conflictCheck.text();
+            console.error('Conflict check error:', {
+                status: conflictCheck.status,
+                error: errorText
+            });
+            throw new Error(`Failed to check for conflicts: ${errorText}`);
+        }
+
+        const conflicts = await conflictCheck.json();
+        if (conflicts.length > 0) {
+            alert('This time slot is already booked for the selected car. Please choose a different slot.');
+            // Reopen modal to select different slot
+            document.getElementById('scheduleModal').classList.remove('hidden');
+            return;
+        }
+    } catch (err) {
+        console.error('Error checking conflicts:', err);
+        // Continue anyway, but warn user
+        if (!confirm('Could not verify slot availability. Do you want to proceed anyway?')) {
+            return;
         }
     }
 
@@ -373,11 +570,8 @@ function submitBooking() {
         customer_phone: document.getElementById('phoneNumber').value,
         time_slot: timeSlotVal,
         test_drive_type: document.querySelector('input[name="testDriveType"]:checked').value,
-        car_make: document.getElementById('carMake').value,
-        car_model: document.getElementById('carModel').value,
-        kilometers: Number(document.getElementById('kilometers').value) || null,
-        car_variant: document.getElementById('carVariant').value,
-        year_of_manufacture: yearValue
+        car_id: Number(carId),
+        kilometers: Number(document.getElementById('kilometers').value) || null
     };
 
     // Send booking to Supabase REST API
@@ -401,6 +595,11 @@ function submitBooking() {
         .then((rows) => {
             console.log('Booking saved to Supabase:', rows[0]);
             alert('Booking submitted and saved to Supabase!');
+            // Reset form
+            customerForm.reset();
+            document.getElementById('scheduleDisplayText').textContent = 'Select schedule';
+            document.getElementById('selectedCar').value = '';
+            document.getElementById('carId').value = '';
         })
         .catch((err) => {
             console.error('Error saving to Supabase:', err);

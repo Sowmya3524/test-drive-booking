@@ -546,6 +546,24 @@ main {
     border-color: #e5ecff;
 }
 
+.chip-booked {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    cursor: not-allowed !important;
+    opacity: 0.6;
+}
+
+.chip-booked:hover {
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    background: rgba(239, 68, 68, 0.2) !important;
+}
+
+.chip-time:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
 .schedule-modal-footer {
     display: flex;
     justify-content: flex-end;
