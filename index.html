@@ -32,220 +32,224 @@
             </div>
         </header>
 
-        <main class="main-layout">
-            <!-- Left Side: Form Section -->
-            <div class="form-container">
-                <section class="form-section">
-                    <div class="form-section-inner">
-                        <h2>
-                            Customer Information
-                            <span class="section-tag">Step 1 &mdash; Tell us about you</span>
-                        </h2>
-                        <form id="customerForm">
-                        <div class="form-group">
-                            <label for="customerName">Customer Name  *</span></label>
-                            <input type="text" id="customerName" name="customerName" required placeholder="Enter customer full name">
-                        </div>
+        <main>
+            <!-- Simple tab navigation to switch between Booking and Manage Cars -->
+            <div class="tab-row">
+                <button type="button" id="tabBooking" class="tab-button tab-active">Book Test Drive</button>
+                <button type="button" id="tabManageCars" class="tab-button">Manage Cars</button>
+            </div>
 
-                        
-
-                        <div class="form-group">
-                            <label for="customerLocation">Customer Location  *</span></label>
-                            <input type="text" id="customerLocation" name="customerLocation" required placeholder="Area / Landmark for pick-up">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="phoneNumber">Customer Phone Number  *</span></label>
-                            <input
-                                type="tel"
-                                id="phoneNumber"
-                                name="phoneNumber"
-                                required
-                                placeholder="10-digit mobile number"
-                                minlength="10"
-                                maxlength="10"
-                                pattern="[0-9]{10}"
-                                inputmode="numeric"
-                                title="Please enter a valid 10-digit mobile number"
-                            >
-                        </div>
-
-                        <div class="form-group">
-                            <label for="scheduleDisplay">Schedule  *</span></label>
-                            <div id="scheduleDisplay" class="schedule-display" role="button" tabindex="0">
-                                <span id="scheduleDisplayText">Select schedule</span>
+            <!-- Booking Page (existing UI) -->
+            <div id="bookingPage" class="main-layout">
+                <!-- Left Side: Form Section -->
+                <div class="form-container">
+                    <section class="form-section">
+                        <div class="form-section-inner">
+                            <h2>
+                                Customer Information
+                                <span class="section-tag">Step 1 &mdash; Tell us about you</span>
+                            </h2>
+                            <form id="customerForm">
+                            <div class="form-group">
+                                <label for="customerName">Customer Name  *</span></label>
+                                <input type="text" id="customerName" name="customerName" required placeholder="Enter customer full name">
                             </div>
-                            <!-- Hidden actual values used by JS/submit -->
-                            <input type="hidden" id="bookingDate" name="bookingDate">
-                            <input type="hidden" id="timeSlot" name="timeSlot">
-                            <input type="hidden" id="carId" name="carId">
-                        </div>
 
-                        <div class="form-group">
-                            <label for="consultantName">Consultant Name  *</span></label>
-                            <input type="text" id="consultantName" name="consultantName" placeholder="Enter consultant name">
-                        </div>
+                            
 
-                        <div class="form-group">
-                            <label>Test Drive Type  *</span></label>
-                            <div class="radio-group">
-                                <label class="radio-label">
-                                    <input type="radio" name="testDriveType" value="home" required>
-                                    <span>Home Test Drive</span>
-                                </label>
-                                <label class="radio-label">
-                                    <input type="radio" name="testDriveType" value="branch" required>
-                                    <span>Branch Test Drive</span>
-                                </label>
+                            <div class="form-group">
+                                <label for="customerLocation">Customer Location  *</span></label>
+                                <input type="text" id="customerLocation" name="customerLocation" required placeholder="Area / Landmark for pick-up">
                             </div>
-                        </div>
 
-                        <div class="form-group">
-                            <label for="selectedCar">Select Car  *</span></label>
-                            <select id="selectedCar" name="selectedCar" required>
-                                <option value="">Loading cars...</option>
-                            </select>
-                            <small class="form-hint">Select a car from the available inventory. The calendar will show available slots for this car.</small>
-                        </div>
+                            <div class="form-group">
+                                <label for="phoneNumber">Customer Phone Number  *</span></label>
+                                <input
+                                    type="tel"
+                                    id="phoneNumber"
+                                    name="phoneNumber"
+                                    required
+                                    placeholder="10-digit mobile number"
+                                    minlength="10"
+                                    maxlength="10"
+                                    pattern="[0-9]{10}"
+                                    inputmode="numeric"
+                                    title="Please enter a valid 10-digit mobile number"
+                                >
+                            </div>
 
-                        <div class="form-group">
-                            <label for="kilometers">Kilometers  *</span></label>
-                            <input
-                                type="number"
-                                id="kilometers"
-                                name="kilometers"
-                                required
-                                min="0"
-                                step="1"
-                                placeholder="Enter odometer reading (kms)"
-                            >
-                        </div>
+                            <div class="form-group">
+                                <label for="selectedCar">Select Car  *</span></label>
+                                <select id="selectedCar" name="selectedCar" required>
+                                    <option value="">Loading cars...</option>
+                                </select>
+                                <small class="form-hint">Select a car from the available inventory. The calendar will show available slots for this car.</small>
+                            </div>
 
-                        <div class="form-group">
-                            <label for="yearOfManufacture">Year of Manufacture  *</span></label>
-                            <select id="yearOfManufacture" name="yearOfManufacture" required>
-                                <option value="">Select year</option>
-                                <option value="1990">1990</option>
-                                <option value="1991">1991</option>
-                                <option value="1992">1992</option>
-                                <option value="1993">1993</option>
-                                <option value="1994">1994</option>
-                                <option value="1995">1995</option>
-                                <option value="1996">1996</option>
-                                <option value="1997">1997</option>
-                                <option value="1998">1998</option>
-                                <option value="1999">1999</option>
-                                <option value="2000">2000</option>
-                                <option value="2001">2001</option>
-                                <option value="2002">2002</option>
-                                <option value="2003">2003</option>
-                                <option value="2004">2004</option>
-                                <option value="2005">2005</option>
-                                <option value="2006">2006</option>
-                                <option value="2007">2007</option>
-                                <option value="2008">2008</option>
-                                <option value="2009">2009</option>
-                                <option value="2010">2010</option>
-                                <option value="2011">2011</option>
-                                <option value="2012">2012</option>
-                                <option value="2013">2013</option>
-                                <option value="2014">2014</option>
-                                <option value="2015">2015</option>
-                                <option value="2016">2016</option>
-                                <option value="2017">2017</option>
-                                <option value="2018">2018</option>
-                                <option value="2019">2019</option>
-                                <option value="2020">2020</option>
-                                <option value="2021">2021</option>
-                                <option value="2022">2022</option>
-                                <option value="2023">2023</option>
-                                <option value="2024">2024</option>
-                                <option value="2025">2025</option>
-                                <option value="2026">2026</option>
-                                <option value="other">Other (older than 1990)</option>
-                            </select>
-                            <input
-                                type="number"
-                                id="yearOfManufactureOther"
-                                name="yearOfManufactureOther"
-                                placeholder="Enter year (e.g. 1985)"
-                                min="1900"
-                                max="2026"
-                                style="margin-top: 10px; display: none;"
-                            >
-                            <small class="form-hint">Select the year of manufacture for the vehicle.</small>
+                            <div class="form-group">
+                                <label for="scheduleDisplay">Schedule  *</span></label>
+                                <div id="scheduleDisplay" class="schedule-display" role="button" tabindex="0">
+                                    <span id="scheduleDisplayText">Select schedule</span>
+                                </div>
+                                <!-- Hidden actual values used by JS/submit -->
+                                <input type="hidden" id="bookingDate" name="bookingDate">
+                                <input type="hidden" id="timeSlot" name="timeSlot">
+                                <input type="hidden" id="carId" name="carId">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="consultantName">Consultant Name  *</span></label>
+                                <select id="consultantName" name="consultantName" required>
+                                    <option value="">Select consultant</option>
+                                    <option value="Max">Max</option>
+                                    <option value="Joe">Joe</option>
+                                    <option value="Abhay">Abhay</option>
+                                    <option value="Arvind">Arvind</option>
+                                    <option value="Balu">Balu</option>
+                                    <option value="Sid">Sid</option>
+                                    <option value="Vinitha">Vinitha</option>
+                                    <option value="Pavani">Pavani</option>
+                                    <option value="Jyoti">Jyoti</option>
+                                    <option value="Rohan">Rohan</option>
+                                </select>
+                                <small class="form-hint">Choose the consultant handling this booking. Booked consultants for the selected slot will be disabled.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Test Drive Type  *</span></label>
+                                <div class="radio-group">
+                                    <label class="radio-label">
+                                        <input type="radio" name="testDriveType" value="home" required>
+                                        <span>Home Test Drive</span>
+                                    </label>
+                                    <label class="radio-label">
+                                        <input type="radio" name="testDriveType" value="branch" required>
+                                        <span>Branch Test Drive</span>
+                                    </label>
+                                </div>
+                            </div>
+                            </form>
                         </div>
-                        </form>
+                    </section>
+
+                    <!-- Submit Button -->
+                    <div class="submit-section">
+                        <button type="button" id="submitBookingBtn" class="btn-primary btn-large">
+                            Submit Booking
+                        </button>
                     </div>
-                </section>
+                </div>
 
-                <!-- Submit Button -->
-                <div class="submit-section">
-                    <button type="button" id="submitBookingBtn" class="btn-primary btn-large">
-                        Submit Booking
-                    </button>
+                <!-- Right Side: Availability Table Section only -->
+                <div class="car-display-container">
+                    <div class="availability-table-card">
+                        <div class="car-display-header">
+                            <h3>Car Availability</h3>
+                            <p class="car-display-subtitle">Booked time slots by date</p>
+                        </div>
+                        <div class="availability-table-container">
+                            <div id="availabilityTableLoading" class="table-loading">
+                                <p>Loading availability...</p>
+                            </div>
+                            <div id="availabilityTableContent" class="availability-table-content" style="display: none;">
+                                <!-- Table will be rendered here by JavaScript -->
+                            </div>
+                            <div id="availabilityTableEmpty" class="table-empty" style="display: none;">
+                                <p>No bookings found. All cars are available.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Right Side: Car Display Section -->
-            <div class="car-display-container">
-                <div class="car-display-card">
-                    <div class="car-display-header">
-                        <h3>Selected Vehicle</h3>
-                        <p class="car-display-subtitle">Your test drive car</p>
-                    </div>
-                    <div class="car-display-content">
-                        <div id="carDisplayImage" class="car-image-placeholder">
-                            <svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="200" height="120" rx="12" fill="rgba(148, 163, 184, 0.1)"/>
-                                <path d="M50 80 L150 80 L140 60 L110 50 L90 50 L60 60 Z" stroke="rgba(148, 163, 184, 0.3)" stroke-width="2" fill="none"/>
-                                <circle cx="60" cy="80" r="8" fill="rgba(148, 163, 184, 0.2)"/>
-                                <circle cx="140" cy="80" r="8" fill="rgba(148, 163, 184, 0.2)"/>
-                            </svg>
-                            <p class="car-placeholder-text">Select a car to view details</p>
-                        </div>
-                        <div id="carDisplayInfo" class="car-info">
-                            <div class="car-info-item">
-                                <span class="car-info-label">Make:</span>
-                                <span id="carInfoMake" class="car-info-value">—</span>
-                            </div>
-                            <div class="car-info-item">
-                                <span class="car-info-label">Model:</span>
-                                <span id="carInfoModel" class="car-info-value">—</span>
-                            </div>
-                            <div class="car-info-item">
-                                <span class="car-info-label">Variant:</span>
-                                <span id="carInfoVariant" class="car-info-value">—</span>
-                            </div>
-                        </div>
-                        <div class="car-features">
-                            <div class="feature-badge">
-                                <span>✓ Verified</span>
-                            </div>
-                            <div class="feature-badge">
-                                <span>✓ Available</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <!-- Manage Cars Page (for adding new test drive cars) -->
+            <div id="manageCarsPage" class="manage-cars-layout" style="display: none;">
+                <div class="form-container">
+                    <section class="form-section">
+                        <div class="form-section-inner">
+                            <h2>
+                                Manage Test Drive Cars
+                                <span class="section-tag">Add new cars to the inventory</span>
+                            </h2>
+                            <form id="carForm">
+                                <div class="form-group">
+                                    <label for="carMake">Car Make  *</span></label>
+                                    <input type="text" id="carMake" name="carMake" required placeholder="e.g. Hyundai, MG, Mercedes">
+                                </div>
 
-                <!-- Availability Table Section -->
-                <div class="availability-table-card">
-                    <div class="car-display-header">
-                        <h3>Car Availability</h3>
-                        <p class="car-display-subtitle">Booked time slots by date</p>
-                    </div>
-                    <div class="availability-table-container">
-                        <div id="availabilityTableLoading" class="table-loading">
-                            <p>Loading availability...</p>
+                                <div class="form-group">
+                                    <label for="carModel">Car Model  *</span></label>
+                                    <input type="text" id="carModel" name="carModel" required placeholder="e.g. Creta, Hector, C-Class">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="carVariant">Variant  *</span></label>
+                                    <select id="carVariant" name="carVariant" required>
+                                        <option value="">Select variant</option>
+                                        <option value="Petrol">Petrol</option>
+                                        <option value="Diesel">Diesel</option>
+                                        <option value="Electric">Electric</option>
+                                        <option value="Hybrid">Hybrid</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="carYear">Year of Manufacture  *</span></label>
+                                    <select id="carYear" name="carYear" required>
+                                        <option value="">Select year</option>
+                                        <!-- Years 1990–2026 -->
+                                        <option value="1990">1990</option>
+                                        <option value="1991">1991</option>
+                                        <option value="1992">1992</option>
+                                        <option value="1993">1993</option>
+                                        <option value="1994">1994</option>
+                                        <option value="1995">1995</option>
+                                        <option value="1996">1996</option>
+                                        <option value="1997">1997</option>
+                                        <option value="1998">1998</option>
+                                        <option value="1999">1999</option>
+                                        <option value="2000">2000</option>
+                                        <option value="2001">2001</option>
+                                        <option value="2002">2002</option>
+                                        <option value="2003">2003</option>
+                                        <option value="2004">2004</option>
+                                        <option value="2005">2005</option>
+                                        <option value="2006">2006</option>
+                                        <option value="2007">2007</option>
+                                        <option value="2008">2008</option>
+                                        <option value="2009">2009</option>
+                                        <option value="2010">2010</option>
+                                        <option value="2011">2011</option>
+                                        <option value="2012">2012</option>
+                                        <option value="2013">2013</option>
+                                        <option value="2014">2014</option>
+                                        <option value="2015">2015</option>
+                                        <option value="2016">2016</option>
+                                        <option value="2017">2017</option>
+                                        <option value="2018">2018</option>
+                                        <option value="2019">2019</option>
+                                        <option value="2020">2020</option>
+                                        <option value="2021">2021</option>
+                                        <option value="2022">2022</option>
+                                        <option value="2023">2023</option>
+                                        <option value="2024">2024</option>
+                                        <option value="2025">2025</option>
+                                        <option value="2026">2026</option>
+                                    </select>
+                                </div>
+
+                                <div class="submit-section">
+                                    <button type="button" id="addCarBtn" class="btn-primary btn-large">
+                                        Add Car to Inventory
+                                    </button>
+                                </div>
+
+                                <small class="form-hint">
+                                    When you add a car here, it will appear in the "Select Car" dropdown on the booking page and in the availability table.
+                                </small>
+                            </form>
                         </div>
-                        <div id="availabilityTableContent" class="availability-table-content" style="display: none;">
-                            <!-- Table will be rendered here by JavaScript -->
-                        </div>
-                        <div id="availabilityTableEmpty" class="table-empty" style="display: none;">
-                            <p>No bookings found. All cars are available.</p>
-                        </div>
-                    </div>
+                    </section>
                 </div>
             </div>
         </main>
@@ -272,10 +276,10 @@
                 <div class="schedule-column">
                     <h3>Select time</h3>
                     <div class="chip-row chip-row-time">
-                        <button type="button" class="chip chip-time" data-time-slot="09:00-11:00">09:00</button>
-                        <button type="button" class="chip chip-time" data-time-slot="11:00-13:00">11:00</button>
-                        <button type="button" class="chip chip-time" data-time-slot="13:00-15:00">13:00</button>
-                        <button type="button" class="chip chip-time" data-time-slot="15:00-17:00">15:00</button>
+                        <button type="button" class="chip chip-time" data-time-slot="09:00-11:00">09:00 - 11:00</button>
+                        <button type="button" class="chip chip-time" data-time-slot="11:00-13:00">11:00 - 13:00</button>
+                        <button type="button" class="chip chip-time" data-time-slot="13:00-15:00">13:00 - 15:00</button>
+                        <button type="button" class="chip chip-time" data-time-slot="15:00-17:00">15:00 - 17:00</button>
                     </div>
                     <small class="form-hint">Office working hours: 9 AM – 5 PM. Slots are divided within this time.</small>
                 </div>

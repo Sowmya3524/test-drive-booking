@@ -12,26 +12,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Initialize all event listeners
 function initializeEventListeners() {
+    // Simple tab navigation between Booking and Manage Cars
+    const tabBooking = document.getElementById('tabBooking');
+    const tabManageCars = document.getElementById('tabManageCars');
+    if (tabBooking && tabManageCars) {
+        tabBooking.addEventListener('click', () => switchMainView('booking'));
+        tabManageCars.addEventListener('click', () => switchMainView('manageCars'));
+    }
+
     // Submit Booking button
     const submitBtn = document.getElementById('submitBookingBtn');
     if (submitBtn) {
         submitBtn.addEventListener('click', submitBooking);
     }
 
-    // Year of manufacture - show/hide custom year input
-    const yearSelect = document.getElementById('yearOfManufacture');
-    const yearOtherInput = document.getElementById('yearOfManufactureOther');
-    if (yearSelect && yearOtherInput) {
-        yearSelect.addEventListener('change', function () {
-            if (yearSelect.value === 'other') {
-                yearOtherInput.style.display = 'block';
-                yearOtherInput.required = true;
-            } else {
-                yearOtherInput.style.display = 'none';
-                yearOtherInput.required = false;
-                yearOtherInput.value = '';
-            }
-        });
+    // Add Car button (Manage Cars page)
+    const addCarBtn = document.getElementById('addCarBtn');
+    if (addCarBtn) {
+        addCarBtn.addEventListener('click', submitNewCar);
     }
 
     // Schedule modal behaviour
@@ -48,6 +46,54 @@ function initializeEventListeners() {
                 checkAvailability();
             }
         });
+    }
+
+    // When consultant changes, clear any selected schedule and refresh availability for new consultant
+    const consultantSelect = document.getElementById('consultantName');
+    if (consultantSelect) {
+        consultantSelect.addEventListener('change', function () {
+            // Clear previously chosen schedule
+            const bookingDateInput = document.getElementById('bookingDate');
+            const timeSlotInput = document.getElementById('timeSlot');
+            const scheduleText = document.getElementById('scheduleDisplayText');
+            if (bookingDateInput) bookingDateInput.value = '';
+            if (timeSlotInput) timeSlotInput.value = '';
+            if (scheduleText) scheduleText.textContent = 'Select schedule';
+
+            // If schedule modal is open and a date is already set, re-run availability for new consultant
+            const dateInput = document.getElementById('scheduleDateInput');
+            if (dateInput && dateInput.value) {
+                checkAvailability();
+            }
+        });
+    }
+}
+
+// Switch between booking page and manage cars page
+function switchMainView(view) {
+    const bookingPage = document.getElementById('bookingPage');
+    const manageCarsPage = document.getElementById('manageCarsPage');
+    const tabBooking = document.getElementById('tabBooking');
+    const tabManageCars = document.getElementById('tabManageCars');
+
+    const showBooking = view === 'booking';
+
+    if (bookingPage) bookingPage.style.display = showBooking ? 'flex' : 'none';
+    if (manageCarsPage) manageCarsPage.style.display = showBooking ? 'none' : 'flex';
+
+    if (tabBooking) {
+        if (showBooking) {
+            tabBooking.classList.add('tab-active');
+        } else {
+            tabBooking.classList.remove('tab-active');
+        }
+    }
+    if (tabManageCars) {
+        if (!showBooking) {
+            tabManageCars.classList.add('tab-active');
+        } else {
+            tabManageCars.classList.remove('tab-active');
+        }
     }
 }
 
@@ -151,74 +197,10 @@ function updateCarId() {
     }
 }
 
-// Update car display on right side
+// Update car display on right side (currently not used - card removed)
 function updateCarDisplay(carId) {
-    const carInfoMake = document.getElementById('carInfoMake');
-    const carInfoModel = document.getElementById('carInfoModel');
-    const carInfoVariant = document.getElementById('carInfoVariant');
-    const carImagePlaceholder = document.getElementById('carDisplayImage');
-
-    if (!carId || carId === '') {
-        // Reset to placeholder
-        if (carInfoMake) carInfoMake.textContent = '—';
-        if (carInfoModel) carInfoModel.textContent = '—';
-        if (carInfoVariant) carInfoVariant.textContent = '—';
-        if (carImagePlaceholder) {
-            carImagePlaceholder.innerHTML = `
-                <svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="200" height="120" rx="12" fill="rgba(148, 163, 184, 0.1)"/>
-                    <path d="M50 80 L150 80 L140 60 L110 50 L90 50 L60 60 Z" stroke="rgba(148, 163, 184, 0.3)" stroke-width="2" fill="none"/>
-                    <circle cx="60" cy="80" r="8" fill="rgba(148, 163, 184, 0.2)"/>
-                    <circle cx="140" cy="80" r="8" fill="rgba(148, 163, 184, 0.2)"/>
-                </svg>
-                <p class="car-placeholder-text">Select a car to view details</p>
-            `;
-        }
-        return;
-    }
-
-    // Find the selected car from carsData
-    const selectedCarData = carsData.find(car => car.id === Number(carId));
-    
-    if (selectedCarData) {
-        if (carInfoMake) carInfoMake.textContent = selectedCarData.car_make;
-        if (carInfoModel) carInfoModel.textContent = selectedCarData.car_model;
-        if (carInfoVariant) carInfoVariant.textContent = selectedCarData.car_variant;
-        
-        // Update image placeholder with car name and better SVG
-        if (carImagePlaceholder) {
-            carImagePlaceholder.innerHTML = `
-                <div style="width: 100%; height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(56, 189, 248, 0.2)); border-radius: 16px; position: relative; overflow: hidden;">
-                    <svg width="100%" height="140" viewBox="0 0 300 140" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                        <!-- Car body -->
-                        <path d="M60 100 L240 100 L230 75 L200 65 L100 65 L70 75 Z" 
-                              stroke="rgba(96, 165, 250, 0.8)" 
-                              stroke-width="3" 
-                              fill="rgba(96, 165, 250, 0.15)"/>
-                        <!-- Windshield -->
-                        <path d="M100 65 L200 65 L195 55 L105 55 Z" 
-                              stroke="rgba(96, 165, 250, 0.6)" 
-                              stroke-width="2" 
-                              fill="rgba(148, 163, 184, 0.1)"/>
-                        <!-- Wheels -->
-                        <circle cx="80" cy="100" r="12" fill="rgba(15, 23, 42, 0.6)" stroke="rgba(96, 165, 250, 0.5)" stroke-width="2"/>
-                        <circle cx="80" cy="100" r="6" fill="rgba(96, 165, 250, 0.4)"/>
-                        <circle cx="220" cy="100" r="12" fill="rgba(15, 23, 42, 0.6)" stroke="rgba(96, 165, 250, 0.5)" stroke-width="2"/>
-                        <circle cx="220" cy="100" r="6" fill="rgba(96, 165, 250, 0.4)"/>
-                        <!-- Headlights -->
-                        <circle cx="240" cy="85" r="4" fill="rgba(255, 255, 255, 0.8)"/>
-                        <circle cx="60" cy="85" r="4" fill="rgba(255, 255, 255, 0.6)"/>
-                    </svg>
-                    <p style="margin-top: 8px; font-size: 1.1rem; color: #e5ecff; font-weight: 700; text-align: center; position: relative; z-index: 1; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);">
-                        ${selectedCarData.car_make} ${selectedCarData.car_model}
-                    </p>
-                    <p style="font-size: 0.85rem; color: #9ca3af; position: relative; z-index: 1; margin-top: 4px;">
-                        ${selectedCarData.car_variant}
-                    </p>
-                </div>
-            `;
-        }
-    }
+    // Intentionally left minimal. Kept only to avoid errors from existing calls.
+    return;
 }
 
 // -----------------------------
@@ -227,6 +209,32 @@ function updateCarDisplay(carId) {
 
 // All possible time slots
 const ALL_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'];
+
+// Helper: check if a given slot is already in the past for a given date
+function isSlotInPast(dateStr, slot) {
+    if (!dateStr || !slot) return false;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // If the date is before today, it's past
+    if (dateStr < todayStr) return true;
+
+    // If the date is after today, it's in the future
+    if (dateStr > todayStr) return false;
+
+    // Same day: compare current time with slot END time
+    // Example slot: '15:00-17:00' → we allow booking until 17:00.
+    const [, endTime] = slot.split('-'); // e.g. '17:00'
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+
+    const now = new Date();
+    const slotEnd = new Date();
+    slotEnd.setHours(endHour, endMinute, 0, 0);
+
+    // If current time is equal or after slot END, treat slot as past
+    // (consultants can still book and go out during the slot window).
+    return now >= slotEnd;
+}
 
 // Load and render availability table
 async function loadAvailabilityTable() {
@@ -244,7 +252,7 @@ async function loadAvailabilityTable() {
         // Fetch all bookings with car details (only future dates)
         const today = new Date().toISOString().split('T')[0];
         const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/bookings?booking_date=gte.${today}&select=id,booking_date,time_slot,car_id,cars!inner(car_make,car_model,car_variant)&order=booking_date,car_id`,
+            `${SUPABASE_URL}/rest/v1/bookings?booking_date=gte.${today}&select=id,booking_date,time_slot,consultant_name,car_id,cars!inner(car_make,car_model,car_variant)&order=booking_date,car_id`,
             {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -291,7 +299,8 @@ async function loadAvailabilityTable() {
             allCars.forEach(car => {
                 groupedData[dateStr][car.id] = {
                     car: car,
-                    bookedSlots: []
+                    // bookedSlots: record of slot -> consultant name
+                    bookedSlots: {}
                 };
             });
         }
@@ -301,9 +310,12 @@ async function loadAvailabilityTable() {
             if (booking.cars && booking.booking_date && booking.time_slot) {
                 const dateStr = booking.booking_date;
                 const carId = booking.car_id;
+                const slot = booking.time_slot;
+                const consultant = booking.consultant_name || '—';
 
                 if (groupedData[dateStr] && groupedData[dateStr][carId]) {
-                    groupedData[dateStr][carId].bookedSlots.push(booking.time_slot);
+                    // For each car/date, store which consultant owns each slot
+                    groupedData[dateStr][carId].bookedSlots[slot] = consultant;
                 }
             }
         });
@@ -362,9 +374,11 @@ function renderAvailabilityTable(groupedData, allCars) {
         const carsForDate = groupedData[dateStr];
         let hasBookings = false;
 
-        // Check if any car has bookings on this date
+        // Check if any car has FUTURE bookings on this date (ignore past slots for "real-time" view)
         Object.values(carsForDate).forEach(carData => {
-            if (carData.bookedSlots.length > 0) {
+            const uniqueBooked = Object.keys(carData.bookedSlots);
+            const futureBooked = uniqueBooked.filter(slot => !isSlotInPast(dateStr, slot));
+            if (futureBooked.length > 0) {
                 hasBookings = true;
             }
         });
@@ -382,12 +396,23 @@ function renderAvailabilityTable(groupedData, allCars) {
 
         // Car rows for this date
         Object.values(carsForDate).forEach(carData => {
-            if (carData.bookedSlots.length === 0) return; // Skip cars with no bookings
+            const bookedMap = carData.bookedSlots;
+            const allBookedSlots = Object.keys(bookedMap);
+            if (allBookedSlots.length === 0) return; // Skip cars with no bookings at all
 
             const car = carData.car;
             const carName = `${car.car_make} ${car.car_model} (${car.car_variant})`;
-            const bookedSlots = carData.bookedSlots;
-            const availableSlots = ALL_TIME_SLOTS.filter(slot => !bookedSlots.includes(slot));
+
+            // Remove past slots for display
+            const bookedSlots = allBookedSlots.filter(slot => !isSlotInPast(dateStr, slot));
+
+            // If no future booked slots for this car on this date, skip row
+            if (bookedSlots.length === 0) return;
+
+            // Available slots are those not booked and not in the past
+            const availableSlots = ALL_TIME_SLOTS.filter(slot => 
+                !bookedSlots.includes(slot) && !isSlotInPast(dateStr, slot)
+            );
 
             const carRow = document.createElement('tr');
             carRow.innerHTML = `
@@ -396,7 +421,7 @@ function renderAvailabilityTable(groupedData, allCars) {
                 <td>
                     <div class="slots-container">
                         ${bookedSlots.map(slot => 
-                            `<span class="slot-badge booked">${slot}</span>`
+                            `<span class="slot-badge booked">${slot} <span style="font-size:0.75rem;opacity:0.85;">(${bookedMap[slot]})</span></span>`
                         ).join('')}
                         ${availableSlots.map(slot => 
                             `<span class="slot-badge available">${slot}</span>`
@@ -518,9 +543,144 @@ function setupHyderabadLocationSuggestions() {
         renderSuggestions(baseSuggestions.slice(0, 25));
     }
 
+    // Try to extract a human-readable place name from a Google Maps-style URL
+    function extractPlaceNameFromText(text) {
+        if (!text) return null;
+        const value = text.trim();
+
+        // Match ".../maps/place/<NAME>/@..."
+        const placeMatch = value.match(/\/maps\/place\/([^/@]+)/);
+        if (placeMatch && placeMatch[1]) {
+            try {
+                const decoded = decodeURIComponent(placeMatch[1]);
+                return decoded.replace(/\+/g, ' ').trim();
+            } catch {
+                return placeMatch[1].replace(/\+/g, ' ').trim();
+            }
+        }
+
+        return null;
+    }
+
+    // Try to extract coordinates from pasted text (plain "lat, lon" or from common map URLs)
+    function extractCoordinatesFromText(text) {
+        if (!text) return null;
+        const value = text.trim();
+
+        // Patterns inside Google Maps URLs: @lat,lon or q=lat,lon
+        const atMatch = value.match(/@(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
+        if (atMatch) {
+            return { lat: parseFloat(atMatch[1]), lon: parseFloat(atMatch[2]) };
+        }
+        const qMatch = value.match(/[?&]q=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
+        if (qMatch) {
+            return { lat: parseFloat(qMatch[1]), lon: parseFloat(qMatch[2]) };
+        }
+
+        // Plain coordinates: "17.4123, 78.4567"
+        const plainMatch = value.match(/(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/);
+        if (plainMatch) {
+            return { lat: parseFloat(plainMatch[1]), lon: parseFloat(plainMatch[2]) };
+        }
+
+        return null;
+    }
+
+    // Convert pasted maps links / coordinates into a readable address in the field
+    async function resolvePastedLocation(rawValue) {
+        if (!rawValue) return;
+
+        // 1) Prefer the explicit place name embedded in the URL (closest to what user sees)
+        const name = extractPlaceNameFromText(rawValue);
+
+        // 2) Also try to grab coordinates (may be used to enrich context)
+        const coords = extractCoordinatesFromText(rawValue);
+
+        // Helper to show suggestions after setting the value
+        function showSuggestionsForCurrentValue() {
+            const query = input.value.toLowerCase();
+            const localMatches = baseSuggestions.filter(loc =>
+                loc.toLowerCase().includes(query)
+            );
+            renderSuggestions(localMatches.slice(0, 20));
+        }
+
+        // Case A: we have both a name and coordinates → use name + area from reverse geocode
+        if (name && coords) {
+            try {
+                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.lat}&lon=${coords.lon}`;
+                const response = await fetch(url, {
+                    headers: { Accept: 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.display_name) {
+                        const parts = data.display_name.split(',').map(p => p.trim());
+                        // Take a couple of parts after the first (area + city) if available
+                        const areaBits = parts.slice(1, 3).join(', ');
+                        input.value = areaBits
+                            ? `${name}, ${areaBits}`
+                            : name;
+                        showSuggestionsForCurrentValue();
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to enrich pasted location with area:', err);
+            }
+
+            // Fallback: just use the name
+            input.value = name;
+            showSuggestionsForCurrentValue();
+            return;
+        }
+
+        // Case B: only name found
+        if (name) {
+            input.value = name;
+            showSuggestionsForCurrentValue();
+            return;
+        }
+
+        // Case C: no name, only coordinates → reverse geocode
+        if (!coords) return;
+
+        try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.lat}&lon=${coords.lon}`;
+            const response = await fetch(url, {
+                headers: { Accept: 'application/json' }
+            });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+            if (!data || !data.display_name) return;
+
+            const full = data.display_name;
+            const firstComma = full.indexOf(',');
+            const short = firstComma > 0 ? full.slice(0, firstComma) : full;
+
+            input.value = short.trim();
+            showSuggestionsForCurrentValue();
+        } catch (err) {
+            console.error('Failed to resolve pasted location:', err);
+        }
+    }
+
     async function searchNominatimHyderabad(query) {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&city=Hyderabad&countrycodes=in&q=${encodeURIComponent(
-            query
+        // Use Nominatim to search broadly within Hyderabad, but keep responses
+        // small and focused so they are fast and easy to read.
+        //
+        // - limit=10 for speed
+        // - bounded + viewbox around Hyderabad so we don't get far away cities
+        // - We still append "Hyderabad" to keep context
+        const baseQuery = query.toLowerCase().includes('hyderabad')
+            ? query
+            : `${query} Hyderabad`;
+
+        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=10&bounded=1&viewbox=78.22,17.60,78.60,17.20&countrycodes=in&q=${encodeURIComponent(
+            baseQuery
         )}`;
 
         const response = await fetch(url, {
@@ -534,10 +694,33 @@ function setupHyderabadLocationSuggestions() {
         }
 
         const data = await response.json();
-        return data
-            .map(r => r.display_name)
-            .filter(name => typeof name === 'string')
-            .slice(0, 8);
+
+        // Build short, user-friendly labels:
+        // - Use the first part before the comma as primary text
+        //   (e.g. "Road No 5 Banjara Hills")
+        // - We still use full name internally for uniqueness, but display the short text
+        const names = data
+            .map(r => {
+                const full = typeof r.display_name === 'string' ? r.display_name : '';
+                if (!full) return null;
+
+                const firstComma = full.indexOf(',');
+                const short = firstComma > 0 ? full.slice(0, firstComma) : full;
+                return short.trim();
+            })
+            .filter(name => !!name);
+
+        // Prioritise entries that start with the query text, then sort alphabetically
+        const lowerQuery = query.toLowerCase();
+        names.sort((a, b) => {
+            const aStarts = a.toLowerCase().startsWith(lowerQuery);
+            const bStarts = b.toLowerCase().startsWith(lowerQuery);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return a.localeCompare(b);
+        });
+
+        return names;
     }
 
     input.addEventListener('focus', () => {
@@ -560,14 +743,14 @@ function setupHyderabadLocationSuggestions() {
             return;
         }
 
-        // Start with local matches
+        // Start with local matches (alphabetical)
         const localMatches = baseSuggestions.filter(loc =>
             loc.toLowerCase().includes(query)
         );
 
-        renderSuggestions(localMatches.slice(0, 15));
+        renderSuggestions(localMatches.slice(0, 20));
 
-        // Debounce remote search
+        // Debounce remote search (OpenStreetMap) with a short delay for snappier UX
         nominatimTimeoutId = setTimeout(async () => {
             try {
                 const remote = await searchNominatimHyderabad(query);
@@ -579,18 +762,27 @@ function setupHyderabadLocationSuggestions() {
                     }
                 });
 
-                renderSuggestions(combined.slice(0, 25));
+                // Final alphabetical sort of all suggestions
+                combined.sort((a, b) => a.localeCompare(b));
+
+                // Show up to 40 suggestions in dropdown
+                renderSuggestions(combined.slice(0, 40));
             } catch (e) {
                 // On error, keep local matches only
-                renderSuggestions(localMatches.slice(0, 15));
+                renderSuggestions(localMatches.slice(0, 20));
             }
-        }, 350);
+        }, 150);
     });
 
     document.addEventListener('click', function (e) {
         if (!wrapper.contains(e.target)) {
             list.style.display = 'none';
         }
+    });
+
+    // When user pastes a WhatsApp / maps link or coordinates, auto-convert to address
+    input.addEventListener('paste', function () {
+        setTimeout(() => resolvePastedLocation(input.value), 0);
     });
 }
 
@@ -722,8 +914,64 @@ function setupScheduleModal() {
             scheduleDisplayText.textContent = `${dateText} · ${timeSlotVal.replace('-', ' - ')}`;
         }
 
+        // After schedule is chosen, update which consultants are available for this slot
+        updateConsultantAvailability(dateVal, timeSlotVal);
+
         closeModal();
     });
+}
+
+// Disable consultants who are already booked for the chosen date + slot
+async function updateConsultantAvailability(dateStr, timeSlot) {
+    const consultantSelect = document.getElementById('consultantName');
+    if (!consultantSelect || !dateStr || !timeSlot) return;
+
+    try {
+        const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/bookings?booking_date=eq.${dateStr}&time_slot=eq.${encodeURIComponent(timeSlot)}&select=consultant_name`,
+            {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            }
+        );
+
+        if (!response.ok) {
+            console.warn('Consultant list availability fetch failed.');
+            return;
+        }
+
+        const rows = await response.json();
+        const bookedConsultants = new Set(
+            rows
+                .map(r => r.consultant_name)
+                .filter(name => typeof name === 'string' && name.trim() !== '')
+        );
+
+        // Reset current selection if it becomes unavailable
+        if (bookedConsultants.has(consultantSelect.value)) {
+            consultantSelect.value = '';
+        }
+
+        // Update options: disable those already booked for that slot
+        Array.from(consultantSelect.options).forEach(opt => {
+            if (!opt.value) {
+                opt.disabled = false;
+                return;
+            }
+
+            if (bookedConsultants.has(opt.value)) {
+                opt.disabled = true;
+                opt.textContent = `${opt.value} (Booked)`;
+            } else {
+                opt.disabled = false;
+                opt.textContent = opt.value;
+            }
+        });
+    } catch (err) {
+        console.error('Error updating consultant availability:', err);
+    }
 }
 
 // Check availability for selected car and date
@@ -765,12 +1013,46 @@ async function checkAvailability() {
         }
 
         const bookings = await response.json();
-        const bookedSlots = bookings.map(b => b.time_slot);
+        const carBookedSlots = new Set(bookings.map(b => b.time_slot));
 
-        // Update time chips
+        // Also fetch bookings for the selected consultant on this date (any car)
+        const consultantSelect = document.getElementById('consultantName');
+        let consultantBookedSlots = new Set();
+        if (consultantSelect && consultantSelect.value) {
+            const consultant = encodeURIComponent(consultantSelect.value);
+            const consResponse = await fetch(
+                `${SUPABASE_URL}/rest/v1/bookings?consultant_name=eq.${consultant}&booking_date=eq.${selectedDate}&select=time_slot`,
+                {
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                }
+            );
+
+            if (consResponse.ok) {
+                const consBookings = await consResponse.json();
+                consultantBookedSlots = new Set(consBookings.map(b => b.time_slot));
+            } else {
+                console.warn('Consultant availability check failed, falling back to car-only availability.');
+            }
+        }
+
+        // Update time chips: disable if slot is in the past, or consultant is booked, or car is booked
         document.querySelectorAll('.chip-time').forEach(chip => {
             const slot = chip.getAttribute('data-time-slot');
-            if (bookedSlots.includes(slot)) {
+
+            if (isSlotInPast(selectedDate, slot)) {
+                chip.disabled = true;
+                chip.classList.add('chip-booked');
+                chip.classList.remove('chip-selected');
+                chip.title = 'This slot time is already over';
+            } else if (consultantBookedSlots.has(slot)) {
+                chip.disabled = true;
+                chip.classList.add('chip-booked');
+                chip.classList.remove('chip-selected');
+                chip.title = 'This consultant is already booked for this time';
+            } else if (carBookedSlots.has(slot)) {
                 chip.disabled = true;
                 chip.classList.add('chip-booked');
                 chip.classList.remove('chip-selected');
@@ -843,23 +1125,41 @@ async function submitBooking() {
             document.getElementById('scheduleModal').classList.remove('hidden');
             return;
         }
+
+        // Also ensure the selected consultant is not booked on any car for this date and slot
+        const consultantName = document.getElementById('consultantName').value;
+        if (consultantName) {
+            const consultantConflict = await fetch(
+                `${SUPABASE_URL}/rest/v1/bookings?consultant_name=eq.${encodeURIComponent(consultantName)}&booking_date=eq.${bookingDateVal}&time_slot=eq.${encodeURIComponent(timeSlotVal)}&select=id`,
+                {
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                }
+            );
+
+            if (!consultantConflict.ok) {
+                const errorText = await consultantConflict.text();
+                console.error('Consultant conflict check error:', {
+                    status: consultantConflict.status,
+                    error: errorText
+                });
+                throw new Error(`Failed to check consultant conflicts: ${errorText}`);
+            }
+
+            const consultantConflicts = await consultantConflict.json();
+            if (consultantConflicts.length > 0) {
+                alert('This consultant is already booked for this time slot on another car. Please choose a different consultant or slot.');
+                document.getElementById('scheduleModal').classList.remove('hidden');
+                return;
+            }
+        }
     } catch (err) {
         console.error('Error checking conflicts:', err);
         // Continue anyway, but warn user
         if (!confirm('Could not verify slot availability. Do you want to proceed anyway?')) {
             return;
-        }
-    }
-
-    // Collect year of manufacture
-    const yearSelect = document.getElementById('yearOfManufacture');
-    const yearOtherInput = document.getElementById('yearOfManufactureOther');
-    let yearValue = '';
-    if (yearSelect) {
-        if (yearSelect.value === 'other' && yearOtherInput) {
-            yearValue = yearOtherInput.value;
-        } else {
-            yearValue = yearSelect.value;
         }
     }
 
@@ -872,9 +1172,7 @@ async function submitBooking() {
         customer_phone: document.getElementById('phoneNumber').value,
         time_slot: timeSlotVal,
         test_drive_type: document.querySelector('input[name="testDriveType"]:checked').value,
-        car_id: Number(carId),
-        kilometers: Number(document.getElementById('kilometers').value) || null,
-        year_of_manufacture: yearValue
+        car_id: Number(carId)
     };
 
     // Send booking to Supabase REST API
@@ -903,12 +1201,6 @@ async function submitBooking() {
             document.getElementById('scheduleDisplayText').textContent = 'Select schedule';
             document.getElementById('selectedCar').value = '';
             document.getElementById('carId').value = '';
-            if (yearOtherInput) {
-                yearOtherInput.style.display = 'none';
-                yearOtherInput.required = false;
-            }
-            // Reset car display
-            updateCarDisplay('');
             // Refresh availability table
             loadAvailabilityTable();
         })
@@ -916,4 +1208,64 @@ async function submitBooking() {
             console.error('Error saving to Supabase:', err);
             alert('There was an error saving booking to Supabase. Check console for details.');
         });
+}
+
+// Submit new car to Supabase (Manage Cars page)
+async function submitNewCar() {
+    const carForm = document.getElementById('carForm');
+    if (!carForm) return;
+
+    if (!carForm.checkValidity()) {
+        carForm.reportValidity();
+        return;
+    }
+
+    const carMake = document.getElementById('carMake').value.trim();
+    const carModel = document.getElementById('carModel').value.trim();
+    const carVariant = document.getElementById('carVariant').value;
+    const carYear = document.getElementById('carYear').value;
+
+    const payload = {
+        car_make: carMake,
+        car_model: carModel,
+        car_variant: carVariant,
+        year_of_manufacture: carYear
+    };
+
+    try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/cars`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Prefer: 'return=representation'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            console.error('Error adding car:', text);
+            alert('There was an error adding the car. Please check console for details.');
+            return;
+        }
+
+        const rows = await res.json();
+        console.log('Car added:', rows[0]);
+        alert('New car added to inventory!');
+
+        // Reset the form
+        carForm.reset();
+
+        // Reload cars in booking dropdown and availability table
+        await loadCars();
+        await loadAvailabilityTable();
+
+        // Switch back to booking tab so user can immediately use the new car
+        switchMainView('booking');
+    } catch (err) {
+        console.error('Unexpected error adding car:', err);
+        alert('Unexpected error while adding car. Please try again.');
+    }
 }

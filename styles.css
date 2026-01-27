@@ -236,6 +236,36 @@ main {
     padding: 28px 32px 32px;
 }
 
+/* Top tab bar (Book Test Drive / Manage Cars) */
+.tab-row {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 20px;
+}
+
+.tab-button {
+    border: none;
+    background: transparent;
+    color: #e5ecff;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 999px;
+    margin-right: 8px;
+}
+
+.tab-button:hover {
+    background: rgba(15, 23, 42, 0.4);
+}
+
+.tab-active {
+    background: linear-gradient(120deg, #fb923c, #f97316);
+    color: #ffffff;
+    box-shadow: 0 8px 20px rgba(248, 113, 22, 0.5);
+}
+
 /* Two-column layout */
 .main-layout {
     display: grid;
@@ -641,6 +671,11 @@ main {
     position: sticky;
     top: 24px;
     height: fit-content;
+}
+
+/* Manage Cars layout (single column but aligned with form width) */
+.manage-cars-layout {
+    margin-top: 16px;
 }
 
 .car-display-card {
