@@ -4,10 +4,13 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function () {
-    initializeEventListeners();
-    setupHyderabadLocationSuggestions();
-    loadCars(); // Load cars from Supabase
-    loadAvailabilityTable(); // Load availability table
+    // Load slots first so schedule modal & availability use the latest configuration
+    loadSlots().finally(() => {
+        initializeEventListeners();
+        setupHyderabadLocationSuggestions();
+        loadCars(); // Load cars from Supabase
+        loadAvailabilityTable(); // Load availability table
+    });
 });
 
 // Initialize all event listeners
@@ -15,9 +18,11 @@ function initializeEventListeners() {
     // Simple tab navigation between Booking and Manage Cars
     const tabBooking = document.getElementById('tabBooking');
     const tabManageCars = document.getElementById('tabManageCars');
-    if (tabBooking && tabManageCars) {
+    const tabManageSlots = document.getElementById('tabManageSlots');
+    if (tabBooking && tabManageCars && tabManageSlots) {
         tabBooking.addEventListener('click', () => switchMainView('booking'));
         tabManageCars.addEventListener('click', () => switchMainView('manageCars'));
+        tabManageSlots.addEventListener('click', () => switchMainView('manageSlots'));
     }
 
     // Submit Booking button
@@ -30,6 +35,32 @@ function initializeEventListeners() {
     const addCarBtn = document.getElementById('addCarBtn');
     if (addCarBtn) {
         addCarBtn.addEventListener('click', submitNewCar);
+    }
+
+    // Add Slot button (Manage Slots page)
+    const addSlotBtn = document.getElementById('addSlotBtn');
+    if (addSlotBtn) {
+        addSlotBtn.addEventListener('click', submitNewSlot);
+    }
+
+    // Slot car filter (Manage Slots page - right side)
+    const slotCarFilter = document.getElementById('slotCarFilter');
+    if (slotCarFilter) {
+        slotCarFilter.addEventListener('change', () => {
+            renderManageSlotsList();
+        });
+    }
+
+    // Slot car selector on left side (Manage Time Slots form) - keep in sync
+    const slotCarSelect = document.getElementById('slotCarSelect');
+    if (slotCarSelect) {
+        slotCarSelect.addEventListener('change', () => {
+            const filter = document.getElementById('slotCarFilter');
+            if (filter) {
+                filter.value = slotCarSelect.value;
+            }
+            renderManageSlotsList();
+        });
     }
 
     // Schedule modal behaviour
@@ -90,31 +121,34 @@ function initializeEventListeners() {
     }
 }
 
-// Switch between booking page and manage cars page
+// Switch between booking page, manage cars, and manage slots pages
 function switchMainView(view) {
     const bookingPage = document.getElementById('bookingPage');
     const manageCarsPage = document.getElementById('manageCarsPage');
+    const manageSlotsPage = document.getElementById('manageSlotsPage');
     const tabBooking = document.getElementById('tabBooking');
     const tabManageCars = document.getElementById('tabManageCars');
+    const tabManageSlots = document.getElementById('tabManageSlots');
 
     const showBooking = view === 'booking';
+    const showCars = view === 'manageCars';
+    const showSlots = view === 'manageSlots';
 
     if (bookingPage) bookingPage.style.display = showBooking ? 'flex' : 'none';
-    if (manageCarsPage) manageCarsPage.style.display = showBooking ? 'none' : 'flex';
+    if (manageCarsPage) manageCarsPage.style.display = showCars ? 'flex' : 'none';
+    if (manageSlotsPage) manageSlotsPage.style.display = showSlots ? 'flex' : 'none';
 
     if (tabBooking) {
-        if (showBooking) {
-            tabBooking.classList.add('tab-active');
-        } else {
-            tabBooking.classList.remove('tab-active');
-        }
+        if (showBooking) tabBooking.classList.add('tab-active');
+        else tabBooking.classList.remove('tab-active');
     }
     if (tabManageCars) {
-        if (!showBooking) {
-            tabManageCars.classList.add('tab-active');
-        } else {
-            tabManageCars.classList.remove('tab-active');
-        }
+        if (showCars) tabManageCars.classList.add('tab-active');
+        else tabManageCars.classList.remove('tab-active');
+    }
+    if (tabManageSlots) {
+        if (showSlots) tabManageSlots.classList.add('tab-active');
+        else tabManageSlots.classList.remove('tab-active');
     }
 }
 
@@ -133,6 +167,259 @@ function getCarModelKeyFromCar(car) {
     const variant = (car.car_variant || '').trim();
     // Use a delimiter that is unlikely to appear in names
     return `${make}||${model}||${variant}`;
+}
+
+function getCarsForModelKey(modelKey) {
+    const group = carModelGroups[modelKey];
+    return group ? group.cars : [];
+}
+
+// -----------------------------
+// Slots - dynamic management
+// -----------------------------
+
+async function loadSlots() {
+    try {
+        const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/slots?select=*&is_active=eq.true&order=sort_order,time_slot`,
+            {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            }
+        );
+
+        if (!response.ok) {
+            const text = await response.text();
+            console.error('Error loading slots:', text);
+            return;
+        }
+
+        slotsData = await response.json();
+        if (slotsData && slotsData.length > 0) {
+            ALL_TIME_SLOTS = slotsData.map((s) => s.time_slot);
+        }
+
+        renderSlotCarFilter();
+        renderManageSlotsList();
+
+        console.log(`✅ Loaded ${slotsData.length} slots. Current ALL_TIME_SLOTS:`, ALL_TIME_SLOTS);
+    } catch (err) {
+        console.error('Unexpected error loading slots:', err);
+    }
+}
+
+// Populate the car filter dropdown on the Manage Slots page
+function renderSlotCarFilter() {
+    const slotCarFilter = document.getElementById('slotCarFilter');
+    const slotCarSelect = document.getElementById('slotCarSelect');
+    if (!slotCarFilter && !slotCarSelect) return;
+
+    const previous = slotCarFilter.value;
+
+    // Clear options
+    if (slotCarFilter) {
+        slotCarFilter.innerHTML = '';
+        const allOption = document.createElement('option');
+        allOption.value = '';
+        allOption.textContent = 'All cars';
+        slotCarFilter.appendChild(allOption);
+    }
+    if (slotCarSelect) {
+        slotCarSelect.innerHTML = '';
+        const allOption2 = document.createElement('option');
+        allOption2.value = '';
+        allOption2.textContent = 'All cars';
+        slotCarSelect.appendChild(allOption2);
+    }
+
+    const modelKeys = Object.keys(carModelGroups || {});
+    modelKeys
+        .sort((a, b) => carModelGroups[a].label.localeCompare(carModelGroups[b].label))
+        .forEach((key) => {
+            const group = carModelGroups[key];
+            const count = group.cars ? group.cars.length : 0;
+            const label = count > 1 ? `${group.label} — ${count} cars` : group.label;
+
+            if (slotCarFilter) {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = label;
+                slotCarFilter.appendChild(opt);
+            }
+            if (slotCarSelect) {
+                const opt2 = document.createElement('option');
+                opt2.value = key;
+                opt2.textContent = label;
+                slotCarSelect.appendChild(opt2);
+            }
+        });
+
+    // Try to keep previous selection if still valid
+    if (slotCarFilter) {
+        if (previous && modelKeys.includes(previous)) {
+            slotCarFilter.value = previous;
+        } else {
+            slotCarFilter.value = '';
+        }
+    }
+    if (slotCarSelect && slotCarFilter) {
+        // keep both in sync
+        slotCarSelect.value = slotCarFilter.value;
+    }
+}
+
+function renderManageSlotsList() {
+    const manageSlotsList = document.getElementById('manageSlotsList');
+    if (!manageSlotsList) return;
+
+    if (!slotsData || slotsData.length === 0) {
+        manageSlotsList.innerHTML =
+            '<p class="manage-cars-empty">No slots configured yet. Add a slot on the left.</p>';
+        return;
+    }
+
+    manageSlotsList.innerHTML = '';
+
+    const slotCarFilter = document.getElementById('slotCarFilter');
+    const filterModelKey = slotCarFilter ? slotCarFilter.value : '';
+
+    slotsData.forEach((slot, index) => {
+        const card = document.createElement('div');
+        card.className = 'manage-car-card';
+
+        const label = slot.label || slot.time_slot || 'Unnamed slot';
+
+        let usageHtml = '';
+
+        const modelKeys = filterModelKey ? [filterModelKey] : Object.keys(carModelGroups);
+
+        if (!modelKeys || modelKeys.length === 0) {
+            usageHtml =
+                '<div class="manage-car-subtitle">No cars configured. Add cars on the Manage Cars page.</div>';
+        } else {
+            const lines = [];
+
+            modelKeys.forEach((modelKey) => {
+                const group = carModelGroups[modelKey];
+                if (!group) return;
+                const carsForModel = group.cars || [];
+
+                // Bookings for this model + slot
+                const bookingsForThisModelAndSlot =
+                    (allBookingsData || []).filter((b) => {
+                        if (b.time_slot !== slot.time_slot || !b.cars) return false;
+                        const mk = getCarModelKeyFromCar(b.cars);
+                        return mk === modelKey;
+                    }) || [];
+
+                carsForModel.forEach((car) => {
+                    const booking = bookingsForThisModelAndSlot.find((b) => b.car_id === car.id);
+                    const vin = car.vin || `Car ID ${car.id}`;
+                    const modelLabel = `${car.car_make} ${car.car_model} (${car.car_variant})`;
+                    const consultant = booking ? booking.consultant_name || '—' : null;
+
+                    const statusText = booking
+                        ? `Booked${consultant ? ` • 👤 ${consultant}` : ''}`
+                        : 'Available';
+
+                    lines.push(`
+                        <div class="slot-usage-line">
+                            <span class="slot-usage-main">${modelLabel}</span>
+                            <span class="slot-usage-vin">VIN: ${vin}</span>
+                            <span class="slot-usage-consultant">${statusText}</span>
+                        </div>
+                    `);
+                });
+            });
+
+            usageHtml =
+                lines.length > 0
+                    ? lines.join('')
+                    : '<div class="manage-car-subtitle">No cars match this filter for this slot.</div>';
+        }
+
+        card.innerHTML = `
+            <div class="manage-car-main">
+                <div class="manage-car-title">${label}</div>
+                <div class="manage-car-subtitle">Value: ${slot.time_slot}</div>
+                <div class="slot-usage-container">
+                    ${usageHtml}
+                </div>
+            </div>
+            <div class="manage-car-side">
+                <span class="manage-car-chip">Slot #${index + 1}</span>
+            </div>
+        `;
+
+        manageSlotsList.appendChild(card);
+    });
+}
+
+async function submitNewSlot() {
+    const slotForm = document.getElementById('slotForm');
+    if (!slotForm) return;
+
+    if (!slotForm.checkValidity()) {
+        slotForm.reportValidity();
+        return;
+    }
+
+    const start = document.getElementById('slotStart').value;
+    const end = document.getElementById('slotEnd').value;
+    const labelInput = document.getElementById('slotLabel').value.trim();
+
+    if (!start || !end) {
+        alert('Please select both start and end times for the slot.');
+        return;
+    }
+
+    if (end <= start) {
+        alert('End time must be after start time.');
+        return;
+    }
+
+    const formattedStart = start.slice(0, 5);
+    const formattedEnd = end.slice(0, 5);
+    const timeSlot = `${formattedStart}-${formattedEnd}`;
+    const label = labelInput || `${formattedStart} - ${formattedEnd}`;
+
+    const payload = {
+        label,
+        time_slot: timeSlot
+    };
+
+    try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/slots`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Prefer: 'return=representation'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            console.error('Error adding slot:', text);
+            alert('There was an error adding the slot. Please check console for details.');
+            return;
+        }
+
+        const rows = await res.json();
+        console.log('Slot added:', rows[0]);
+        alert('New slot added!');
+
+        slotForm.reset();
+
+        await loadSlots();
+    } catch (err) {
+        console.error('Unexpected error adding slot:', err);
+        alert('Unexpected error while adding slot. Please try again.');
+    }
 }
 
 function getCarsForModelKey(modelKey) {
@@ -223,6 +510,9 @@ async function loadCars() {
                     count > 1 ? `${group.label} — ${count} cars` : group.label;
                 carSelect.appendChild(option);
             });
+
+        // Update car filter on Manage Slots page as well
+        renderSlotCarFilter();
 
         console.log(`✅ Loaded ${carsData.length} cars successfully across ${modelKeys.length} models`);
 
@@ -329,8 +619,9 @@ function updateCarDisplay(carId) {
 // Availability Table - Show booked time slots by date and car
 // -----------------------------
 
-// All possible time slots
-const ALL_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'];
+// All possible time slots (will be overwritten by slots from Supabase)
+let ALL_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'];
+let slotsData = [];
 
 // Store bookings data globally for filtering
 let allBookingsData = [];
@@ -392,8 +683,10 @@ async function loadAvailabilityTable() {
 
         const bookings = await response.json();
         
-        // Store bookings globally for filtering
+        // Store bookings globally for filtering and slots usage view
         allBookingsData = bookings || [];
+
+        renderManageSlotsList();
 
         // Check if there's an active filter
         const filterInput = document.getElementById('carAvailabilityFilter');
@@ -1056,9 +1349,9 @@ function setupScheduleModal() {
     const timeSlotHidden = document.getElementById('timeSlot');
     const dateInput = document.getElementById('scheduleDateInput');
     const dateChips = document.querySelectorAll('.chip-date');
-    const timeChips = document.querySelectorAll('.chip-time');
+    const timeSlotsContainer = document.querySelector('.chip-row-time');
 
-    if (!scheduleDisplay || !modal || !confirmBtn || !dateInputHidden || !timeSlotHidden || !dateInput) {
+    if (!scheduleDisplay || !modal || !confirmBtn || !dateInputHidden || !timeSlotHidden || !dateInput || !timeSlotsContainer) {
         return;
     }
 
@@ -1088,6 +1381,22 @@ function setupScheduleModal() {
         dateEl.value = todayStr;
         dateEl.min = todayStr;
     }
+
+    // Helper to build time slot chips from ALL_TIME_SLOTS
+    function buildTimeChips() {
+        timeSlotsContainer.innerHTML = '';
+        ALL_TIME_SLOTS.forEach((slot) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'chip chip-time';
+            btn.setAttribute('data-time-slot', slot);
+            const [start, end] = slot.split('-');
+            btn.textContent = `${start} - ${end}`;
+            timeSlotsContainer.appendChild(btn);
+        });
+    }
+
+    buildTimeChips();
 
     // Init date input with today/min
     setToday(dateInput);
@@ -1135,17 +1444,22 @@ function setupScheduleModal() {
     // Check availability when date changes
     dateInput.addEventListener('change', checkAvailability);
 
-    // Time chips
-    timeChips.forEach(chip => {
-        chip.addEventListener('click', () => {
-            timeChips.forEach(c => c.classList.remove('chip-selected'));
-            chip.classList.add('chip-selected');
-        });
+    // Time chips (delegate so it works after rebuilds)
+    timeSlotsContainer.addEventListener('click', (e) => {
+        const target = e.target.closest('.chip-time');
+        if (!target) return;
+        const chips = timeSlotsContainer.querySelectorAll('.chip-time');
+        chips.forEach((c) => c.classList.remove('chip-selected'));
+        if (!target.disabled) {
+            target.classList.add('chip-selected');
+        }
     });
 
     confirmBtn.addEventListener('click', () => {
         const dateVal = dateInput.value;
-        const selectedTimeChip = Array.from(timeChips).find(c => c.classList.contains('chip-selected') && !c.disabled);
+        const selectedTimeChip = Array.from(timeSlotsContainer.querySelectorAll('.chip-time')).find(
+            (c) => c.classList.contains('chip-selected') && !c.disabled
+        );
         const timeSlotVal = selectedTimeChip ? selectedTimeChip.getAttribute('data-time-slot') : '';
 
         if (!dateVal || !timeSlotVal) {

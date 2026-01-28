@@ -37,6 +37,7 @@
             <div class="tab-row">
                 <button type="button" id="tabBooking" class="tab-button tab-active">Book Test Drive</button>
                 <button type="button" id="tabManageCars" class="tab-button">Manage Cars</button>
+                <button type="button" id="tabManageSlots" class="tab-button">Manage Slots</button>
             </div>
 
             <!-- Booking Page (existing UI) -->
@@ -290,6 +291,86 @@
                                 <div id="manageCarsList" class="manage-cars-list">
                                     <!-- Filled by JavaScript -->
                                     <p class="manage-cars-empty">Loading cars...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manage Slots Page (for configuring custom time slots) -->
+            <div id="manageSlotsPage" class="manage-cars-layout" style="display: none;">
+                <div class="manage-cars-grid">
+                    <!-- Left: Manage Slots form -->
+                    <div class="form-container">
+                        <section class="form-section">
+                            <div class="form-section-inner">
+                                <h2>
+                                    Manage Time Slots
+                                    <span class="section-tag">Define custom slots for test drives</span>
+                                </h2>
+                                <form id="slotForm">
+                                    <div class="form-group">
+                                        <label for="slotStart">Start Time  *</label>
+                                        <input type="time" id="slotStart" name="slotStart" required>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="slotEnd">End Time  *</label>
+                                        <input type="time" id="slotEnd" name="slotEnd" required>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="slotLabel">Slot Label (optional)</label>
+                                        <input
+                                            type="text"
+                                            id="slotLabel"
+                                            name="slotLabel"
+                                            placeholder="e.g. Morning Slot (09:00 - 12:00). If empty, label is auto-generated."
+                                        >
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="slotCarSelect">Select Car (optional)</label>
+                                        <select id="slotCarSelect" name="slotCarSelect">
+                                            <option value="">All cars</option>
+                                        </select>
+                                        <small class="form-hint">
+                                            This uses the same car list as the main page. It helps you inspect which cars are free or booked for each slot.
+                                            Bookings are still done from the Book Test Drive tab.
+                                        </small>
+                                    </div>
+
+                                    <div class="submit-section">
+                                        <button type="button" id="addSlotBtn" class="btn-primary btn-large">
+                                            Add Slot
+                                        </button>
+                                    </div>
+
+                                    <small class="form-hint">
+                                        Slots defined here will be used in the Schedule picker and Car Availability grid.
+                                    </small>
+                                </form>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Right: Existing slots list -->
+                    <div class="car-display-container">
+                        <div class="availability-table-card">
+                            <div class="car-display-header">
+                                <h3>Current Slots</h3>
+                                <p class="car-display-subtitle">All active time slots</p>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label for="slotCarFilter">Filter by car (optional)</label>
+                                <select id="slotCarFilter" class="availability-filter-input">
+                                    <option value="">All cars</option>
+                                </select>
+                            </div>
+                            <div class="availability-table-container">
+                                <div id="manageSlotsList" class="manage-cars-list">
+                                    <p class="manage-cars-empty">Loading slots...</p>
                                 </div>
                             </div>
                         </div>
