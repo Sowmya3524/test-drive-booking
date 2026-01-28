@@ -147,6 +147,15 @@
                             <h3>Car Availability</h3>
                             <p class="car-display-subtitle">Booked time slots by date</p>
                         </div>
+                        <div class="availability-filter-section">
+                            <input 
+                                type="text" 
+                                id="carAvailabilityFilter" 
+                                class="availability-filter-input" 
+                                placeholder="🔍 Search by car name (e.g., Mercedes C-Class, Hyundai Creta)"
+                                autocomplete="off"
+                            />
+                        </div>
                         <div class="availability-table-container">
                             <div id="availabilityTableLoading" class="table-loading">
                                 <p>Loading availability...</p>
@@ -156,6 +165,9 @@
                             </div>
                             <div id="availabilityTableEmpty" class="table-empty" style="display: none;">
                                 <p>No bookings found. All cars are available.</p>
+                            </div>
+                            <div id="availabilityTableNoResults" class="table-empty" style="display: none;">
+                                <p>No bookings match your search. Try a different car name.</p>
                             </div>
                         </div>
                     </div>
@@ -185,7 +197,7 @@
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="carVariant">Variant  *</span></label>
+                                        <label for="carVariant">Variant  *</label>
                                         <select id="carVariant" name="carVariant" required>
                                             <option value="">Select variant</option>
                                             <option value="Petrol">Petrol</option>
@@ -196,7 +208,20 @@
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="carYear">Year of Manufacture  *</span></label>
+                                        <label for="carVin">VIN Number  *</label>
+                                        <input
+                                            type="text"
+                                            id="carVin"
+                                            name="carVin"
+                                            required
+                                            minlength="5"
+                                            maxlength="32"
+                                            placeholder="e.g. MBGLA1234567890 (unique vehicle number)"
+                                        >
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="carYear">Year of Manufacture  *</label>
                                         <select id="carYear" name="carYear" required>
                                             <option value="">Select year</option>
                                             <!-- Years 1990–2026 -->

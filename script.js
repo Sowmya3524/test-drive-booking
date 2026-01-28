@@ -67,6 +67,27 @@ function initializeEventListeners() {
             }
         });
     }
+
+    // Car availability filter input
+    const availabilityFilter = document.getElementById('carAvailabilityFilter');
+    if (availabilityFilter) {
+        // Real-time filtering as user types (with debounce)
+        let filterTimeout;
+        availabilityFilter.addEventListener('input', function() {
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => {
+                filterAvailabilityTable(this.value);
+            }, 200);
+        });
+
+        // Also filter on Enter key
+        availabilityFilter.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                filterAvailabilityTable(this.value);
+            }
+        });
+    }
 }
 
 // Switch between booking page and manage cars page
@@ -100,6 +121,25 @@ function switchMainView(view) {
 // Store cars data globally
 let carsData = [];
 
+// Grouped cars by model (make + model + variant)
+// {
+//   [modelKey]: { label: 'Mercedes GLA (Diesel)', cars: [car, car, ...] }
+// }
+let carModelGroups = {};
+
+function getCarModelKeyFromCar(car) {
+    const make = (car.car_make || '').trim();
+    const model = (car.car_model || '').trim();
+    const variant = (car.car_variant || '').trim();
+    // Use a delimiter that is unlikely to appear in names
+    return `${make}||${model}||${variant}`;
+}
+
+function getCarsForModelKey(modelKey) {
+    const group = carModelGroups[modelKey];
+    return group ? group.cars : [];
+}
+
 // Load cars from Supabase
 async function loadCars() {
     const carSelect = document.getElementById('selectedCar');
@@ -113,12 +153,12 @@ async function loadCars() {
         }
 
         // Try with explicit schema first
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/cars?select=*&order=car_make,car_model`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/cars?select=*&order=car_make,car_model,car_variant`, {
             headers: {
                 apikey: SUPABASE_ANON_KEY,
                 Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
                 'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
+                Prefer: 'return=representation'
             }
         });
 
@@ -130,57 +170,83 @@ async function loadCars() {
                 error: errorText,
                 url: `${SUPABASE_URL}/rest/v1/cars`
             });
-            
+
             if (response.status === 404) {
-                carSelect.innerHTML = '<option value="">⚠️ Table not found. Check: 1) Table name is "cars" 2) Table is in "public" schema 3) RLS policy allows SELECT</option>';
+                carSelect.innerHTML =
+                    '<option value="">⚠️ Table not found. Check: 1) Table name is "cars" 2) Table is in "public" schema 3) RLS policy allows SELECT</option>';
                 return;
             }
-            
+
             if (response.status === 401 || response.status === 403) {
-                carSelect.innerHTML = '<option value="">⚠️ Permission denied. Check RLS policy "allow_select_cars_for_anon" exists.</option>';
+                carSelect.innerHTML =
+                    '<option value="">⚠️ Permission denied. Check RLS policy "allow_select_cars_for_anon" exists.</option>';
                 return;
             }
-            
+
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
         carsData = await response.json();
-        
-        if (carsData.length === 0) {
+
+        // Build groups by model
+        carModelGroups = {};
+        carsData.forEach((car) => {
+            const key = getCarModelKeyFromCar(car);
+            if (!carModelGroups[key]) {
+                const label = `${car.car_make} ${car.car_model} (${car.car_variant})`.trim();
+                carModelGroups[key] = {
+                    label: label || 'Unnamed model',
+                    cars: []
+                };
+            }
+            carModelGroups[key].cars.push(car);
+        });
+
+        const modelKeys = Object.keys(carModelGroups);
+
+        if (modelKeys.length === 0) {
             carSelect.innerHTML = '<option value="">No cars available. Please add cars in Supabase.</option>';
             renderManageCarsList();
             return;
         }
-        
-        // Populate dropdown
-        carSelect.innerHTML = '<option value="">Select a car</option>';
-        carsData.forEach(car => {
-            const option = document.createElement('option');
-            option.value = car.id;
-            option.textContent = `${car.car_make} ${car.car_model} (${car.car_variant})`;
-            carSelect.appendChild(option);
-        });
-        
-        console.log(`✅ Loaded ${carsData.length} cars successfully`);
 
-        // Also render list in Manage Cars page
+        // Populate dropdown with ONE option per model (not per physical car)
+        carSelect.innerHTML = '<option value="">Select a car</option>';
+        modelKeys
+            .sort((a, b) => carModelGroups[a].label.localeCompare(carModelGroups[b].label))
+            .forEach((key) => {
+                const group = carModelGroups[key];
+                const count = group.cars.length;
+                const option = document.createElement('option');
+                option.value = key; // store model key, not car_id
+                option.textContent =
+                    count > 1 ? `${group.label} — ${count} cars` : group.label;
+                carSelect.appendChild(option);
+            });
+
+        console.log(`✅ Loaded ${carsData.length} cars successfully across ${modelKeys.length} models`);
+
+        // Also render list in Manage Cars page (all physical cars)
         renderManageCarsList();
     } catch (err) {
         console.error('Error loading cars:', err);
-        
+
         // Check for specific error types
         if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
             if (err.message.includes('ERR_NAME_NOT_RESOLVED') || err.message.includes('network')) {
-                carSelect.innerHTML = '<option value="">⚠️ Network error: Cannot reach Supabase. Check: 1) Internet connection 2) Supabase URL is correct 3) No firewall blocking</option>';
+                carSelect.innerHTML =
+                    '<option value="">⚠️ Network error: Cannot reach Supabase. Check: 1) Internet connection 2) Supabase URL is correct 3) No firewall blocking</option>';
             } else {
-                carSelect.innerHTML = '<option value="">⚠️ Connection failed. Check internet connection and Supabase URL.</option>';
+                carSelect.innerHTML =
+                    '<option value="">⚠️ Connection failed. Check internet connection and Supabase URL.</option>';
             }
         } else if (err.message && err.message.includes('CORS')) {
-            carSelect.innerHTML = '<option value="">⚠️ CORS error: Check Supabase project settings and allowed origins.</option>';
+            carSelect.innerHTML =
+                '<option value="">⚠️ CORS error: Check Supabase project settings and allowed origins.</option>';
         } else {
             carSelect.innerHTML = '<option value="">❌ Error loading cars. Open browser console (F12) for details.</option>';
         }
-        
+
         // Log detailed error for debugging
         console.error('Full error details:', {
             name: err.name,
@@ -209,16 +275,35 @@ function renderManageCarsList() {
 
         const title = `${car.car_make || ''} ${car.car_model || ''}`.trim() || 'Unnamed car';
         const year = car.year_of_manufacture ? ` • ${car.year_of_manufacture}` : '';
+        const vin = car.vin ? `VIN: ${car.vin}` : '';
 
         card.innerHTML = `
             <div class="manage-car-main">
                 <div class="manage-car-title">${title}${year}</div>
-                <div class="manage-car-subtitle">Variant: ${car.car_variant || '-'}</div>
+                <div class="manage-car-subtitle">Variant: ${car.car_variant || '-'}${vin ? ` • ${vin}` : ''}</div>
             </div>
             <div class="manage-car-side">
                 <span class="manage-car-chip">Car #${index + 1}</span>
+                <button type="button" class="manage-car-delete-btn" data-car-id="${car.id}" title="Delete car from inventory">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
             </div>
         `;
+
+        // Add click handler for delete button
+        const deleteBtn = card.querySelector('.manage-car-delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Delete button clicked for car:', { id: car.id, name: title });
+                deleteCar(car.id, title);
+            });
+        } else {
+            console.warn('Delete button not found for car:', car.id);
+        }
 
         listEl.appendChild(card);
     });
@@ -246,6 +331,9 @@ function updateCarDisplay(carId) {
 
 // All possible time slots
 const ALL_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'];
+
+// Store bookings data globally for filtering
+let allBookingsData = [];
 
 // Helper: check if a given slot is already in the past for a given date
 function isSlotInPast(dateStr, slot) {
@@ -289,7 +377,7 @@ async function loadAvailabilityTable() {
         // Fetch all upcoming bookings with car details (live test drives list)
         const today = new Date().toISOString().split('T')[0];
         const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/bookings?booking_date=gte.${today}&select=id,booking_date,time_slot,consultant_name,test_drive_type,customer_location,car_id,cars!inner(car_make,car_model,car_variant)&order=booking_date,time_slot,car_id`,
+            `${SUPABASE_URL}/rest/v1/bookings?booking_date=gte.${today}&select=id,booking_date,time_slot,consultant_name,test_drive_type,customer_location,car_id,cars!inner(car_make,car_model,car_variant,vin)&order=booking_date,time_slot,car_id`,
             {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -303,15 +391,29 @@ async function loadAvailabilityTable() {
         }
 
         const bookings = await response.json();
+        
+        // Store bookings globally for filtering
+        allBookingsData = bookings || [];
 
-        // Render card-style list
-        renderAvailabilityTable(bookings);
+        // Check if there's an active filter
+        const filterInput = document.getElementById('carAvailabilityFilter');
+        const activeFilter = filterInput ? filterInput.value.trim() : '';
+
+        // Render table view (filtered if search is active)
+        if (activeFilter) {
+            filterAvailabilityTable(activeFilter);
+        } else {
+            renderAvailabilityTable(allBookingsData);
+        }
 
         loadingEl.style.display = 'none';
         if (!bookings || bookings.length === 0) {
             emptyEl.style.display = 'block';
+            contentEl.style.display = 'none';
         } else {
-            contentEl.style.display = 'block';
+            if (!activeFilter) {
+                contentEl.style.display = 'block';
+            }
         }
     } catch (err) {
         console.error('Error loading availability table:', err);
@@ -321,81 +423,157 @@ async function loadAvailabilityTable() {
     }
 }
 
-// Render availability as card-style list (similar to "Live Test Drives")
+// Render availability as grid: Time slots as rows, MODELS as columns, VINs listed inside each cell
 function renderAvailabilityTable(bookings) {
     const contentEl = document.getElementById('availabilityTableContent');
+    const emptyEl = document.getElementById('availabilityTableEmpty');
+    const noResultsEl = document.getElementById('availabilityTableNoResults');
+
     if (!contentEl) return;
+
+    // Hide empty/no results messages initially
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (noResultsEl) noResultsEl.style.display = 'none';
 
     if (!bookings || bookings.length === 0) {
         contentEl.innerHTML = '';
         return;
     }
 
-    const listContainer = document.createElement('div');
-    listContainer.className = 'availability-list';
+    const slots = ALL_TIME_SLOTS;
 
-    // Create cards: one per booking (TD), with serial numbers TD #1, TD #2, ...
-    bookings.forEach((booking, index) => {
-        if (!booking.cars) return;
+    // Group bookings by MODEL (make + model + variant)
+    const modelMap = new Map(); // modelKey -> { key, label }
+    const bookingsGrid = new Map(); // modelKey -> slot -> [bookings]
 
+    bookings.forEach((booking) => {
+        if (!booking.cars || !booking.time_slot) return;
         const car = booking.cars;
-        const carName = `${car.car_make} ${car.car_model} (${car.car_variant})`;
-        const consultant = booking.consultant_name || '—';
-        const typeLabel = booking.test_drive_type === 'home' ? 'Home Test Drive' : 'Branch Test Drive';
+        const modelStub = {
+            car_make: car.car_make,
+            car_model: car.car_model,
+            car_variant: car.car_variant
+        };
+        const modelKey = getCarModelKeyFromCar(modelStub);
+        const label = `${car.car_make} ${car.car_model} (${car.car_variant})`;
 
-        const date = new Date(booking.booking_date);
-        const dateFormatted = date.toLocaleDateString('en-IN', {
-            weekday: 'short',
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        });
+        if (!modelMap.has(modelKey)) {
+            modelMap.set(modelKey, { key: modelKey, label });
+        }
 
-        const tdNumber = `TD #${index + 1}`;
+        if (!bookingsGrid.has(modelKey)) {
+            bookingsGrid.set(modelKey, new Map());
+        }
 
-        const card = document.createElement('div');
-        card.className = 'availability-card';
-        card.innerHTML = `
-            <div class="availability-card-left">
-                <div class="availability-car-name">${tdNumber}</div>
-                <div class="availability-meta">
-                    <span class="availability-meta-item">
-                        <span class="availability-meta-label">Car:</span>
-                        <span>${carName}</span>
-                    </span>
-                </div>
-                <div class="availability-meta">
-                    <span class="availability-meta-item">
-                        <span class="availability-meta-label">Date:</span>
-                        <span>${dateFormatted}</span>
-                    </span>
-                    <span class="availability-meta-item">
-                        <span class="availability-meta-label">Slot:</span>
-                        <span>${booking.time_slot}</span>
-                    </span>
-                </div>
-                <div class="availability-meta">
-                    <span class="availability-meta-item">
-                        <span class="availability-meta-label">Consultant:</span>
-                        <span>${consultant}</span>
-                    </span>
-                    ${booking.customer_location ? `<span class="availability-meta-item"><span class="availability-meta-label">Location:</span><span>${booking.customer_location}</span></span>` : ''}
-                </div>
-            </div>
-            <div class="availability-card-right">
-                <div class="availability-tag">${typeLabel}</div>
-                <button type="button" class="btn-end-td" data-booking-id="${booking.id}">End TD</button>
-            </div>
-        `;
-
-        listContainer.appendChild(card);
+        const slotMap = bookingsGrid.get(modelKey);
+        const slot = booking.time_slot;
+        if (!slotMap.has(slot)) {
+            slotMap.set(slot, []);
+        }
+        slotMap.get(slot).push(booking);
     });
 
-    contentEl.innerHTML = '';
-    contentEl.appendChild(listContainer);
+    const models = Array.from(modelMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
-    // Wire up End TD buttons
-    document.querySelectorAll('.btn-end-td').forEach(btn => {
+    // Create table structure
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = 'availability-table-wrapper';
+    tableWrapper.setAttribute('role', 'region');
+    tableWrapper.setAttribute('aria-label', 'Car availability grid - models by column with VIN details');
+
+    const table = document.createElement('table');
+    table.className = 'availability-grid-table';
+
+    const timeSlotColWidth = 140;
+    const modelColWidth = 220;
+    const minTableWidth = timeSlotColWidth + models.length * modelColWidth;
+    table.style.minWidth = `${minTableWidth}px`;
+    table.style.width = `${minTableWidth}px`;
+
+    // Header: Time Slot | Model 1 | Model 2 ...
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    headerRow.innerHTML = '<th class="th-time-slot">Time Slot</th>';
+
+    models.forEach((model) => {
+        const th = document.createElement('th');
+        th.className = 'th-car';
+        th.setAttribute('data-model-key', model.key);
+        th.setAttribute('data-model-name', model.label.toLowerCase());
+        th.textContent = model.label;
+        headerRow.appendChild(th);
+    });
+
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Body: one row per time slot
+    const tbody = document.createElement('tbody');
+
+    slots.forEach((slot) => {
+        const row = document.createElement('tr');
+        row.className = 'availability-table-row';
+
+        const slotCell = document.createElement('td');
+        slotCell.className = 'td-time-slot-header';
+        slotCell.textContent = slot;
+        row.appendChild(slotCell);
+
+        models.forEach((model) => {
+            const cell = document.createElement('td');
+            cell.className = 'td-booking-cell';
+            cell.setAttribute('data-model-key', model.key);
+            cell.setAttribute('data-time-slot', slot);
+
+            const slotMap = bookingsGrid.get(model.key);
+            const slotBookings = slotMap ? slotMap.get(slot) || [] : [];
+
+            if (slotBookings.length === 0) {
+                cell.innerHTML = '<div class="booking-cell-empty">—</div>';
+                cell.classList.add('no-booking');
+            } else {
+                const linesHtml = slotBookings
+                    .map((booking) => {
+                        const consultant = booking.consultant_name || '—';
+                        const location = booking.customer_location || '—';
+                        const typeLabel = booking.test_drive_type === 'home' ? 'Home' : 'Branch';
+                        const vin = (booking.cars && booking.cars.vin) || `Car ID ${booking.car_id}`;
+
+                        return `
+                            <div class="booking-line">
+                                <div class="booking-line-header">
+                                    <span class="booking-line-vin">VIN: ${vin}</span>
+                                    <span class="booking-line-type">${typeLabel}</span>
+                                </div>
+                                <div class="booking-line-body">
+                                    <span class="booking-line-consultant">👤 ${consultant}</span>
+                                    <span class="booking-line-location" title="${location}">📍 ${
+                                        location.length > 25 ? `${location.substring(0, 25)}...` : location
+                                    }</span>
+                                </div>
+                                <button type="button" class="btn-end-td-cell" data-booking-id="${booking.id}">End TD</button>
+                            </div>
+                        `;
+                    })
+                    .join('');
+
+                cell.innerHTML = `<div class="booking-cell-multi">${linesHtml}</div>`;
+                cell.classList.add('has-booking');
+            }
+
+            row.appendChild(cell);
+        });
+
+        tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    tableWrapper.appendChild(table);
+
+    contentEl.innerHTML = '';
+    contentEl.appendChild(tableWrapper);
+
+    document.querySelectorAll('.btn-end-td-cell').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-booking-id');
             if (id) {
@@ -403,6 +581,70 @@ function renderAvailabilityTable(bookings) {
             }
         });
     });
+}
+
+// Filter availability table by car name (show/hide MODEL columns)
+function filterAvailabilityTable(searchTerm) {
+    if (!allBookingsData || allBookingsData.length === 0) {
+        return;
+    }
+
+    const filterLower = searchTerm.toLowerCase().trim();
+    const contentEl = document.getElementById('availabilityTableContent');
+    const emptyEl = document.getElementById('availabilityTableEmpty');
+    const noResultsEl = document.getElementById('availabilityTableNoResults');
+
+    // Get all model columns
+    const modelHeaders = document.querySelectorAll('.th-car');
+
+    if (!filterLower) {
+        // Show all model columns if search is empty
+        modelHeaders.forEach(th => {
+            th.style.display = '';
+            const modelKey = th.getAttribute('data-model-key');
+            // Show all cells for this model
+            document.querySelectorAll(`.td-booking-cell[data-model-key="${modelKey}"]`).forEach(cell => {
+                cell.style.display = '';
+            });
+        });
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (noResultsEl) noResultsEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
+        return;
+    }
+
+    // Filter: Show only columns where model name matches search
+    let visibleCount = 0;
+    modelHeaders.forEach(th => {
+        const modelName = th.getAttribute('data-model-name') || '';
+        const modelKey = th.getAttribute('data-model-key');
+        
+        if (modelName.includes(filterLower)) {
+            // Show this model column
+            th.style.display = '';
+            document.querySelectorAll(`.td-booking-cell[data-model-key="${modelKey}"]`).forEach(cell => {
+                cell.style.display = '';
+            });
+            visibleCount++;
+        } else {
+            // Hide this model column
+            th.style.display = 'none';
+            document.querySelectorAll(`.td-booking-cell[data-model-key="${modelKey}"]`).forEach(cell => {
+                cell.style.display = 'none';
+            });
+        }
+    });
+
+    // Show/hide no results message
+    if (visibleCount === 0) {
+        if (contentEl) contentEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (noResultsEl) noResultsEl.style.display = 'block';
+    } else {
+        if (contentEl) contentEl.style.display = 'block';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (noResultsEl) noResultsEl.style.display = 'none';
+    }
 }
 
 // End a test drive (delete booking)
@@ -421,15 +663,31 @@ async function endTestDrive(bookingId) {
             }
         });
 
-        if (!res.ok) {
-            const text = await res.text();
-            console.error('Error ending test drive:', text);
-            alert('Could not end this test drive. Please check console for details (RLS policy might block DELETE).');
+        // 204 No Content means successful deletion (Supabase returns this for DELETE)
+        // 200 OK also means success
+        if (res.status === 204 || res.status === 200) {
+            console.log('Test drive ended successfully (status:', res.status, ')');
+            alert('Test drive ended.');
+            loadAvailabilityTable();
             return;
         }
 
-        alert('Test drive ended.');
-        loadAvailabilityTable();
+        // Handle error responses
+        if (!res.ok) {
+            const text = await res.text();
+            console.error('Error ending test drive:', {
+                status: res.status,
+                statusText: res.statusText,
+                body: text
+            });
+            
+            if (res.status === 401 || res.status === 403) {
+                alert('Permission denied. Please check Supabase RLS policies for DELETE on the bookings table.');
+            } else {
+                alert('Could not end this test drive. Please check console for details.');
+            }
+            return;
+        }
     } catch (err) {
         console.error('Unexpected error ending test drive:', err);
         alert('Unexpected error while ending test drive. Please try again.');
@@ -972,26 +1230,40 @@ async function updateConsultantAvailability(dateStr, timeSlot) {
     }
 }
 
-// Check availability for selected car and date
+// Check availability for selected car MODEL and date
+// IMPORTANT: a slot is disabled only if ALL physical cars of that model are booked.
 async function checkAvailability() {
-    const carId = document.getElementById('carId').value;
+    const modelKey = document.getElementById('carId').value; // carId now stores model key
     const dateInput = document.getElementById('scheduleDateInput');
     const selectedDate = dateInput ? dateInput.value : '';
 
-    if (!carId || !selectedDate) {
-        // Reset all time chips to enabled if no car/date selected
-        document.querySelectorAll('.chip-time').forEach(chip => {
+    const resetChips = () => {
+        document.querySelectorAll('.chip-time').forEach((chip) => {
             chip.disabled = false;
             chip.classList.remove('chip-booked');
             chip.title = '';
         });
+    };
+
+    if (!modelKey || !selectedDate) {
+        resetChips();
+        return;
+    }
+
+    const carsForModel = getCarsForModelKey(modelKey);
+    if (!carsForModel || carsForModel.length === 0) {
+        console.warn('No cars found for selected model key:', modelKey);
+        resetChips();
         return;
     }
 
     try {
-        // Fetch existing bookings for this car and date
+        const carIds = carsForModel.map((c) => c.id).filter((id) => typeof id === 'number' || typeof id === 'string');
+        const idList = carIds.join(',');
+
+        // Fetch existing bookings for ALL cars of this model on this date
         const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/bookings?car_id=eq.${carId}&booking_date=eq.${selectedDate}&select=time_slot`,
+            `${SUPABASE_URL}/rest/v1/bookings?car_id=in.(${idList})&booking_date=eq.${selectedDate}&select=car_id,time_slot`,
             {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -1002,16 +1274,23 @@ async function checkAvailability() {
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Availability check error:', {
+            console.error('Availability check error (model-based):', {
                 status: response.status,
                 error: errorText,
-                url: `${SUPABASE_URL}/rest/v1/bookings?car_id=eq.${carId}&booking_date=eq.${selectedDate}`
+                url: `${SUPABASE_URL}/rest/v1/bookings?car_id=in.(${idList})&booking_date=eq.${selectedDate}`
             });
             throw new Error(`Failed to check availability: ${errorText}`);
         }
 
         const bookings = await response.json();
-        const carBookedSlots = new Set(bookings.map(b => b.time_slot));
+
+        // Count how many cars are booked per slot for this model
+        const slotBookingCounts = new Map(); // slot -> count
+        bookings.forEach((b) => {
+            if (!b.time_slot) return;
+            const current = slotBookingCounts.get(b.time_slot) || 0;
+            slotBookingCounts.set(b.time_slot, current + 1);
+        });
 
         // Also fetch bookings for the selected consultant on this date (any car)
         const consultantSelect = document.getElementById('consultantName');
@@ -1030,14 +1309,19 @@ async function checkAvailability() {
 
             if (consResponse.ok) {
                 const consBookings = await consResponse.json();
-                consultantBookedSlots = new Set(consBookings.map(b => b.time_slot));
+                consultantBookedSlots = new Set(consBookings.map((b) => b.time_slot));
             } else {
-                console.warn('Consultant availability check failed, falling back to car-only availability.');
+                console.warn('Consultant availability check failed, falling back to model-only availability.');
             }
         }
 
-        // Update time chips: disable if slot is in the past, or consultant is booked, or car is booked
-        document.querySelectorAll('.chip-time').forEach(chip => {
+        const totalCarsForModel = carsForModel.length;
+
+        // Update time chips:
+        // - disable if slot is in the past,
+        // - OR consultant is booked,
+        // - OR ALL cars of this model are booked for that slot.
+        document.querySelectorAll('.chip-time').forEach((chip) => {
             const slot = chip.getAttribute('data-time-slot');
 
             if (isSlotInPast(selectedDate, slot)) {
@@ -1045,16 +1329,23 @@ async function checkAvailability() {
                 chip.classList.add('chip-booked');
                 chip.classList.remove('chip-selected');
                 chip.title = 'This slot time is already over';
-            } else if (consultantBookedSlots.has(slot)) {
+                return;
+            }
+
+            if (consultantBookedSlots.has(slot)) {
                 chip.disabled = true;
                 chip.classList.add('chip-booked');
                 chip.classList.remove('chip-selected');
                 chip.title = 'This consultant is already booked for this time';
-            } else if (carBookedSlots.has(slot)) {
+                return;
+            }
+
+            const bookedCount = slotBookingCounts.get(slot) || 0;
+            if (bookedCount >= totalCarsForModel) {
                 chip.disabled = true;
                 chip.classList.add('chip-booked');
                 chip.classList.remove('chip-selected');
-                chip.title = 'This slot is already booked';
+                chip.title = 'All cars of this model are already booked for this slot';
             } else {
                 chip.disabled = false;
                 chip.classList.remove('chip-booked');
@@ -1062,12 +1353,9 @@ async function checkAvailability() {
             }
         });
     } catch (err) {
-        console.error('Error checking availability:', err);
+        console.error('Error checking availability (model-based):', err);
         // On error, enable all slots (fail open)
-        document.querySelectorAll('.chip-time').forEach(chip => {
-            chip.disabled = false;
-            chip.classList.remove('chip-booked');
-        });
+        resetChips();
     }
 }
 
@@ -1083,22 +1371,37 @@ async function submitBooking() {
     // Extra validation for schedule (because hidden inputs are not required in HTML)
     const bookingDateVal = document.getElementById('bookingDate').value;
     const timeSlotVal = document.getElementById('timeSlot').value;
-    const carId = document.getElementById('carId').value;
+    // NOTE: carId input now stores the MODEL KEY, not a single car_id
+    const modelKey = document.getElementById('carId').value;
     
     if (!bookingDateVal || !timeSlotVal) {
         alert('Please select schedule (date and time) before submitting.');
         return;
     }
 
-    if (!carId) {
+    if (!modelKey) {
         alert('Please select a car before submitting.');
         return;
     }
 
-    // Check for double booking before submitting
+    // Resolve the selected MODEL into a specific free car_id for this date + time slot
+    const carsForModel = getCarsForModelKey(modelKey);
+    if (!carsForModel || carsForModel.length === 0) {
+        alert('The selected car model is not available in inventory. Please refresh and try again.');
+        return;
+    }
+
+    let assignedCarId = null;
+
     try {
+        const carIds = carsForModel.map((c) => c.id).filter((id) => typeof id === 'number' || typeof id === 'string');
+        const idList = carIds.join(',');
+
+        // Fetch bookings for ALL cars of this model for this date + slot
         const conflictCheck = await fetch(
-            `${SUPABASE_URL}/rest/v1/bookings?car_id=eq.${carId}&booking_date=eq.${bookingDateVal}&time_slot=eq.${encodeURIComponent(timeSlotVal)}&select=id`,
+            `${SUPABASE_URL}/rest/v1/bookings?car_id=in.(${idList})&booking_date=eq.${bookingDateVal}&time_slot=eq.${encodeURIComponent(
+                timeSlotVal
+            )}&select=car_id`,
             {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -1109,7 +1412,7 @@ async function submitBooking() {
 
         if (!conflictCheck.ok) {
             const errorText = await conflictCheck.text();
-            console.error('Conflict check error:', {
+            console.error('Conflict check error (model-based):', {
                 status: conflictCheck.status,
                 error: errorText
             });
@@ -1117,18 +1420,31 @@ async function submitBooking() {
         }
 
         const conflicts = await conflictCheck.json();
-        if (conflicts.length > 0) {
-            alert('This time slot is already booked for the selected car. Please choose a different slot.');
-            // Reopen modal to select different slot
+        const bookedCarIds = new Set(conflicts.map((row) => row.car_id));
+
+        // Pick the first physical car of this model that is NOT booked for this slot
+        const freeCar = carsForModel.find((car) => !bookedCarIds.has(car.id));
+
+        if (!freeCar) {
+            // All physical cars of this model are busy in this slot
+            const anyCar = carsForModel[0];
+            const modelLabel = `${anyCar.car_make} ${anyCar.car_model} (${anyCar.car_variant})`;
+            alert(
+                `All ${carsForModel.length} cars of this model are already booked for ${timeSlotVal} on ${bookingDateVal}.\n\nModel: ${modelLabel}\n\nPlease choose a different time slot or car model.`
+            );
             document.getElementById('scheduleModal').classList.remove('hidden');
             return;
         }
 
-        // Also ensure the selected consultant is not booked on any car for this date and slot
+        assignedCarId = freeCar.id;
+
+        // Also ensure the selected consultant is not booked on ANY car for this date and slot
         const consultantName = document.getElementById('consultantName').value;
         if (consultantName) {
             const consultantConflict = await fetch(
-                `${SUPABASE_URL}/rest/v1/bookings?consultant_name=eq.${encodeURIComponent(consultantName)}&booking_date=eq.${bookingDateVal}&time_slot=eq.${encodeURIComponent(timeSlotVal)}&select=id`,
+                `${SUPABASE_URL}/rest/v1/bookings?consultant_name=eq.${encodeURIComponent(
+                    consultantName
+                )}&booking_date=eq.${bookingDateVal}&time_slot=eq.${encodeURIComponent(timeSlotVal)}&select=id`,
                 {
                     headers: {
                         apikey: SUPABASE_ANON_KEY,
@@ -1148,17 +1464,26 @@ async function submitBooking() {
 
             const consultantConflicts = await consultantConflict.json();
             if (consultantConflicts.length > 0) {
-                alert('This consultant is already booked for this time slot on another car. Please choose a different consultant or slot.');
+                alert(
+                    'This consultant is already booked for this time slot on another car. Please choose a different consultant or slot.'
+                );
                 document.getElementById('scheduleModal').classList.remove('hidden');
                 return;
             }
         }
     } catch (err) {
-        console.error('Error checking conflicts:', err);
+        console.error('Error checking conflicts (model-based):', err);
         // Continue anyway, but warn user
         if (!confirm('Could not verify slot availability. Do you want to proceed anyway?')) {
             return;
         }
+        // As a fallback, just pick the first car for this model
+        assignedCarId = carsForModel[0].id;
+    }
+
+    if (!assignedCarId) {
+        alert('Could not assign a specific car for this model. Please try again.');
+        return;
     }
 
     // Prepare payload for Supabase
@@ -1170,7 +1495,7 @@ async function submitBooking() {
         customer_phone: document.getElementById('phoneNumber').value,
         time_slot: timeSlotVal,
         test_drive_type: document.querySelector('input[name="testDriveType"]:checked').value,
-        car_id: Number(carId)
+        car_id: Number(assignedCarId)
     };
 
     // Send booking to Supabase REST API
@@ -1221,12 +1546,14 @@ async function submitNewCar() {
     const carMake = document.getElementById('carMake').value.trim();
     const carModel = document.getElementById('carModel').value.trim();
     const carVariant = document.getElementById('carVariant').value;
+    const carVin = document.getElementById('carVin').value.trim();
     const carYear = document.getElementById('carYear').value;
 
     const payload = {
         car_make: carMake,
         car_model: carModel,
         car_variant: carVariant,
+        vin: carVin,
         year_of_manufacture: carYear
     };
 
@@ -1265,5 +1592,115 @@ async function submitNewCar() {
     } catch (err) {
         console.error('Unexpected error adding car:', err);
         alert('Unexpected error while adding car. Please try again.');
+    }
+}
+
+// Delete car from Supabase (Manage Cars page)
+// NOTE: This will also delete ALL bookings for this car (past + future)
+async function deleteCar(carId, carName) {
+    console.log('Delete car called:', { carId, carName });
+
+    const confirmed = confirm(
+        `Are you sure you want to delete "${carName}" from the inventory?\n\n` +
+            `This will also delete ALL bookings linked to this car (past and future).`
+    );
+    if (!confirmed) {
+        console.log('Deletion cancelled by user');
+        return;
+    }
+
+    if (!carId) {
+        alert('Error: Car ID is missing. Cannot delete.');
+        console.error('Car ID is missing');
+        return;
+    }
+
+    try {
+        // First delete all bookings for this car_id
+        console.log('Deleting all bookings for car before deleting car row...', carId);
+        const deleteBookingsRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/bookings?car_id=eq.${carId}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            }
+        );
+
+        if (!deleteBookingsRes.ok && deleteBookingsRes.status !== 204) {
+            const text = await deleteBookingsRes.text();
+            console.error('Error deleting bookings for car:', {
+                status: deleteBookingsRes.status,
+                statusText: deleteBookingsRes.statusText,
+                body: text
+            });
+            alert('Could not delete bookings for this car. Please check console (F12) for details.');
+            return;
+        }
+
+        console.log('Bookings deleted (or none existed). Now deleting car row...');
+
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/cars?id=eq.${carId}`, {
+            method: 'DELETE',
+            headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            }
+        });
+
+        console.log('Delete car response status:', res.status, res.statusText);
+
+        if (res.status === 204 || res.status === 200) {
+            // Clear dropdown selection if the deleted car was selected
+            const selectedCar = document.getElementById('selectedCar');
+            const carIdInput = document.getElementById('carId');
+            if (selectedCar && selectedCar.value === String(carId)) {
+                selectedCar.value = '';
+            }
+            if (carIdInput && carIdInput.value === String(carId)) {
+                carIdInput.value = '';
+            }
+
+            const manageCarsList = document.getElementById('manageCarsList');
+            if (manageCarsList) {
+                manageCarsList.innerHTML = '<p class="manage-cars-empty">Refreshing...</p>';
+            }
+
+            await loadCars();
+            await loadAvailabilityTable();
+
+            alert(`"${carName}" has been deleted from inventory.`);
+            return;
+        }
+
+        if (!res.ok) {
+            const text = await res.text();
+            console.error('Error deleting car - Full response:', {
+                status: res.status,
+                statusText: res.statusText,
+                body: text
+            });
+
+            if (res.status === 401 || res.status === 403) {
+                alert(
+                    `Permission denied (${res.status}).\n\n` +
+                        `Please run the SQL script "add_delete_permissions.sql" in Supabase SQL Editor to enable DELETE permissions.\n\n` +
+                        `Check browser console for details.`
+                );
+            } else if (res.status === 404) {
+                alert(`Car not found (${res.status}). The car may have already been deleted.`);
+            } else {
+                alert(
+                    `Error deleting car (Status: ${res.status}).\n\n` +
+                        `Please check browser console (F12) for details.\n\n` +
+                        `Error: ${text.substring(0, 200)}`
+                );
+            }
+        }
+    } catch (err) {
+        console.error('Unexpected error deleting car:', err);
+        alert('Unexpected error while deleting car. Please try again.');
     }
 }
