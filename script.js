@@ -4,13 +4,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function () {
-    // Load slots first so schedule modal & availability use the latest configuration
-    loadSlots().finally(() => {
-        initializeEventListeners();
-        setupHyderabadLocationSuggestions();
-        loadCars(); // Load cars from Supabase
-        loadAvailabilityTable(); // Load availability table
-    });
+    initializeEventListeners();
+    setupHyderabadLocationSuggestions();
+    loadCars(); // Load cars from Supabase
+    loadAvailabilityTable(); // Load availability table
 });
 
 // Initialize all event listeners
@@ -18,11 +15,9 @@ function initializeEventListeners() {
     // Simple tab navigation between Booking and Manage Cars
     const tabBooking = document.getElementById('tabBooking');
     const tabManageCars = document.getElementById('tabManageCars');
-    const tabManageSlots = document.getElementById('tabManageSlots');
-    if (tabBooking && tabManageCars && tabManageSlots) {
+    if (tabBooking && tabManageCars) {
         tabBooking.addEventListener('click', () => switchMainView('booking'));
         tabManageCars.addEventListener('click', () => switchMainView('manageCars'));
-        tabManageSlots.addEventListener('click', () => switchMainView('manageSlots'));
     }
 
     // Submit Booking button
@@ -35,32 +30,6 @@ function initializeEventListeners() {
     const addCarBtn = document.getElementById('addCarBtn');
     if (addCarBtn) {
         addCarBtn.addEventListener('click', submitNewCar);
-    }
-
-    // Add Slot button (Manage Slots page)
-    const addSlotBtn = document.getElementById('addSlotBtn');
-    if (addSlotBtn) {
-        addSlotBtn.addEventListener('click', submitNewSlot);
-    }
-
-    // Slot car filter (Manage Slots page - right side)
-    const slotCarFilter = document.getElementById('slotCarFilter');
-    if (slotCarFilter) {
-        slotCarFilter.addEventListener('change', () => {
-            renderManageSlotsList();
-        });
-    }
-
-    // Slot car selector on left side (Manage Time Slots form) - keep in sync
-    const slotCarSelect = document.getElementById('slotCarSelect');
-    if (slotCarSelect) {
-        slotCarSelect.addEventListener('change', () => {
-            const filter = document.getElementById('slotCarFilter');
-            if (filter) {
-                filter.value = slotCarSelect.value;
-            }
-            renderManageSlotsList();
-        });
     }
 
     // Schedule modal behaviour
@@ -121,34 +90,25 @@ function initializeEventListeners() {
     }
 }
 
-// Switch between booking page, manage cars, and manage slots pages
+// Switch between booking page and manage cars page
 function switchMainView(view) {
     const bookingPage = document.getElementById('bookingPage');
     const manageCarsPage = document.getElementById('manageCarsPage');
-    const manageSlotsPage = document.getElementById('manageSlotsPage');
     const tabBooking = document.getElementById('tabBooking');
     const tabManageCars = document.getElementById('tabManageCars');
-    const tabManageSlots = document.getElementById('tabManageSlots');
 
     const showBooking = view === 'booking';
-    const showCars = view === 'manageCars';
-    const showSlots = view === 'manageSlots';
 
     if (bookingPage) bookingPage.style.display = showBooking ? 'flex' : 'none';
-    if (manageCarsPage) manageCarsPage.style.display = showCars ? 'flex' : 'none';
-    if (manageSlotsPage) manageSlotsPage.style.display = showSlots ? 'flex' : 'none';
+    if (manageCarsPage) manageCarsPage.style.display = showBooking ? 'none' : 'flex';
 
     if (tabBooking) {
         if (showBooking) tabBooking.classList.add('tab-active');
         else tabBooking.classList.remove('tab-active');
     }
     if (tabManageCars) {
-        if (showCars) tabManageCars.classList.add('tab-active');
+        if (!showBooking) tabManageCars.classList.add('tab-active');
         else tabManageCars.classList.remove('tab-active');
-    }
-    if (tabManageSlots) {
-        if (showSlots) tabManageSlots.classList.add('tab-active');
-        else tabManageSlots.classList.remove('tab-active');
     }
 }
 
@@ -174,253 +134,6 @@ function getCarsForModelKey(modelKey) {
     return group ? group.cars : [];
 }
 
-// -----------------------------
-// Slots - dynamic management
-// -----------------------------
-
-async function loadSlots() {
-    try {
-        const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/slots?select=*&is_active=eq.true&order=sort_order,time_slot`,
-            {
-                headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-                }
-            }
-        );
-
-        if (!response.ok) {
-            const text = await response.text();
-            console.error('Error loading slots:', text);
-            return;
-        }
-
-        slotsData = await response.json();
-        if (slotsData && slotsData.length > 0) {
-            ALL_TIME_SLOTS = slotsData.map((s) => s.time_slot);
-        }
-
-        renderSlotCarFilter();
-        renderManageSlotsList();
-
-        console.log(`✅ Loaded ${slotsData.length} slots. Current ALL_TIME_SLOTS:`, ALL_TIME_SLOTS);
-    } catch (err) {
-        console.error('Unexpected error loading slots:', err);
-    }
-}
-
-// Populate the car filter dropdown on the Manage Slots page
-function renderSlotCarFilter() {
-    const slotCarFilter = document.getElementById('slotCarFilter');
-    const slotCarSelect = document.getElementById('slotCarSelect');
-    if (!slotCarFilter && !slotCarSelect) return;
-
-    const previous = slotCarFilter.value;
-
-    // Clear options
-    if (slotCarFilter) {
-        slotCarFilter.innerHTML = '';
-        const allOption = document.createElement('option');
-        allOption.value = '';
-        allOption.textContent = 'All cars';
-        slotCarFilter.appendChild(allOption);
-    }
-    if (slotCarSelect) {
-        slotCarSelect.innerHTML = '';
-        const allOption2 = document.createElement('option');
-        allOption2.value = '';
-        allOption2.textContent = 'All cars';
-        slotCarSelect.appendChild(allOption2);
-    }
-
-    const modelKeys = Object.keys(carModelGroups || {});
-    modelKeys
-        .sort((a, b) => carModelGroups[a].label.localeCompare(carModelGroups[b].label))
-        .forEach((key) => {
-            const group = carModelGroups[key];
-            const count = group.cars ? group.cars.length : 0;
-            const label = count > 1 ? `${group.label} — ${count} cars` : group.label;
-
-            if (slotCarFilter) {
-                const opt = document.createElement('option');
-                opt.value = key;
-                opt.textContent = label;
-                slotCarFilter.appendChild(opt);
-            }
-            if (slotCarSelect) {
-                const opt2 = document.createElement('option');
-                opt2.value = key;
-                opt2.textContent = label;
-                slotCarSelect.appendChild(opt2);
-            }
-        });
-
-    // Try to keep previous selection if still valid
-    if (slotCarFilter) {
-        if (previous && modelKeys.includes(previous)) {
-            slotCarFilter.value = previous;
-        } else {
-            slotCarFilter.value = '';
-        }
-    }
-    if (slotCarSelect && slotCarFilter) {
-        // keep both in sync
-        slotCarSelect.value = slotCarFilter.value;
-    }
-}
-
-function renderManageSlotsList() {
-    const manageSlotsList = document.getElementById('manageSlotsList');
-    if (!manageSlotsList) return;
-
-    if (!slotsData || slotsData.length === 0) {
-        manageSlotsList.innerHTML =
-            '<p class="manage-cars-empty">No slots configured yet. Add a slot on the left.</p>';
-        return;
-    }
-
-    manageSlotsList.innerHTML = '';
-
-    const slotCarFilter = document.getElementById('slotCarFilter');
-    const filterModelKey = slotCarFilter ? slotCarFilter.value : '';
-
-    slotsData.forEach((slot, index) => {
-        const card = document.createElement('div');
-        card.className = 'manage-car-card';
-
-        const label = slot.label || slot.time_slot || 'Unnamed slot';
-
-        let usageHtml = '';
-
-        const modelKeys = filterModelKey ? [filterModelKey] : Object.keys(carModelGroups);
-
-        if (!modelKeys || modelKeys.length === 0) {
-            usageHtml =
-                '<div class="manage-car-subtitle">No cars configured. Add cars on the Manage Cars page.</div>';
-        } else {
-            const lines = [];
-
-            modelKeys.forEach((modelKey) => {
-                const group = carModelGroups[modelKey];
-                if (!group) return;
-                const carsForModel = group.cars || [];
-
-                // Bookings for this model + slot
-                const bookingsForThisModelAndSlot =
-                    (allBookingsData || []).filter((b) => {
-                        if (b.time_slot !== slot.time_slot || !b.cars) return false;
-                        const mk = getCarModelKeyFromCar(b.cars);
-                        return mk === modelKey;
-                    }) || [];
-
-                carsForModel.forEach((car) => {
-                    const booking = bookingsForThisModelAndSlot.find((b) => b.car_id === car.id);
-                    const vin = car.vin || `Car ID ${car.id}`;
-                    const modelLabel = `${car.car_make} ${car.car_model} (${car.car_variant})`;
-                    const consultant = booking ? booking.consultant_name || '—' : null;
-
-                    const statusText = booking
-                        ? `Booked${consultant ? ` • 👤 ${consultant}` : ''}`
-                        : 'Available';
-
-                    lines.push(`
-                        <div class="slot-usage-line">
-                            <span class="slot-usage-main">${modelLabel}</span>
-                            <span class="slot-usage-vin">VIN: ${vin}</span>
-                            <span class="slot-usage-consultant">${statusText}</span>
-                        </div>
-                    `);
-                });
-            });
-
-            usageHtml =
-                lines.length > 0
-                    ? lines.join('')
-                    : '<div class="manage-car-subtitle">No cars match this filter for this slot.</div>';
-        }
-
-        card.innerHTML = `
-            <div class="manage-car-main">
-                <div class="manage-car-title">${label}</div>
-                <div class="manage-car-subtitle">Value: ${slot.time_slot}</div>
-                <div class="slot-usage-container">
-                    ${usageHtml}
-                </div>
-            </div>
-            <div class="manage-car-side">
-                <span class="manage-car-chip">Slot #${index + 1}</span>
-            </div>
-        `;
-
-        manageSlotsList.appendChild(card);
-    });
-}
-
-async function submitNewSlot() {
-    const slotForm = document.getElementById('slotForm');
-    if (!slotForm) return;
-
-    if (!slotForm.checkValidity()) {
-        slotForm.reportValidity();
-        return;
-    }
-
-    const start = document.getElementById('slotStart').value;
-    const end = document.getElementById('slotEnd').value;
-    const labelInput = document.getElementById('slotLabel').value.trim();
-
-    if (!start || !end) {
-        alert('Please select both start and end times for the slot.');
-        return;
-    }
-
-    if (end <= start) {
-        alert('End time must be after start time.');
-        return;
-    }
-
-    const formattedStart = start.slice(0, 5);
-    const formattedEnd = end.slice(0, 5);
-    const timeSlot = `${formattedStart}-${formattedEnd}`;
-    const label = labelInput || `${formattedStart} - ${formattedEnd}`;
-
-    const payload = {
-        label,
-        time_slot: timeSlot
-    };
-
-    try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/slots`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                Prefer: 'return=representation'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-            const text = await res.text();
-            console.error('Error adding slot:', text);
-            alert('There was an error adding the slot. Please check console for details.');
-            return;
-        }
-
-        const rows = await res.json();
-        console.log('Slot added:', rows[0]);
-        alert('New slot added!');
-
-        slotForm.reset();
-
-        await loadSlots();
-    } catch (err) {
-        console.error('Unexpected error adding slot:', err);
-        alert('Unexpected error while adding slot. Please try again.');
-    }
-}
 
 function getCarsForModelKey(modelKey) {
     const group = carModelGroups[modelKey];
@@ -510,9 +223,6 @@ async function loadCars() {
                     count > 1 ? `${group.label} — ${count} cars` : group.label;
                 carSelect.appendChild(option);
             });
-
-        // Update car filter on Manage Slots page as well
-        renderSlotCarFilter();
 
         console.log(`✅ Loaded ${carsData.length} cars successfully across ${modelKeys.length} models`);
 
@@ -619,9 +329,59 @@ function updateCarDisplay(carId) {
 // Availability Table - Show booked time slots by date and car
 // -----------------------------
 
-// All possible time slots (will be overwritten by slots from Supabase)
-let ALL_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'];
-let slotsData = [];
+// All possible time slots (default pattern used when no custom pattern is set)
+const ALL_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'];
+
+// Custom slot patterns per date (YYYY-MM-DD -> ['HH:MM-HH:MM', ...])
+const customSlotsByDate = {};
+
+// Default working hours for generated slots
+const DEFAULT_DAY_START = '09:00';
+const DEFAULT_DAY_END = '17:00';
+
+function parseTimeToMinutes(timeStr) {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(':').map(Number);
+    return h * 60 + m;
+}
+
+function slotStartMinutes(slot) {
+    if (!slot) return 0;
+    const [start] = slot.split('-');
+    return parseTimeToMinutes(start);
+}
+
+function getSlotsForDate(dateStr) {
+    const key = dateStr || '';
+    const custom = customSlotsByDate[key];
+    if (custom && custom.length > 0) {
+        return custom;
+    }
+    return ALL_TIME_SLOTS;
+}
+
+function generateSlotsForDate(dateStr, slotLengthMinutes, dayStartStr, dayEndStr) {
+    const len = Number.isFinite(slotLengthMinutes) && slotLengthMinutes > 0 ? slotLengthMinutes : 120;
+
+    const startMinutes = parseTimeToMinutes(dayStartStr || DEFAULT_DAY_START);
+    const endMinutes = parseTimeToMinutes(dayEndStr || DEFAULT_DAY_END);
+
+    const slots = [];
+    for (let t = startMinutes; t + len <= endMinutes; t += len) {
+        const startH = String(Math.floor(t / 60)).padStart(2, '0');
+        const startM = String(t % 60).padStart(2, '0');
+        const endT = t + len;
+        const endH = String(Math.floor(endT / 60)).padStart(2, '0');
+        const endM = String(endT % 60).padStart(2, '0');
+        slots.push(`${startH}:${startM}-${endH}:${endM}`);
+    }
+
+    if (dateStr) {
+        customSlotsByDate[dateStr] = slots;
+    }
+
+    return slots;
+}
 
 // Store bookings data globally for filtering
 let allBookingsData = [];
@@ -683,10 +443,8 @@ async function loadAvailabilityTable() {
 
         const bookings = await response.json();
         
-        // Store bookings globally for filtering and slots usage view
+        // Store bookings globally for filtering
         allBookingsData = bookings || [];
-
-        renderManageSlotsList();
 
         // Check if there's an active filter
         const filterInput = document.getElementById('carAvailabilityFilter');
@@ -733,7 +491,15 @@ function renderAvailabilityTable(bookings) {
         return;
     }
 
-    const slots = ALL_TIME_SLOTS;
+    // Determine all unique slots to show as rows (default pattern + any custom slots used in bookings)
+    const baseSlots = [...ALL_TIME_SLOTS];
+    const slotSet = new Set(baseSlots);
+    bookings.forEach((b) => {
+        if (b.time_slot && !slotSet.has(b.time_slot)) {
+            slotSet.add(b.time_slot);
+        }
+    });
+    const slots = Array.from(slotSet).sort((a, b) => slotStartMinutes(a) - slotStartMinutes(b));
 
     // Group bookings by MODEL (make + model + variant)
     const modelMap = new Map(); // modelKey -> { key, label }
@@ -1350,19 +1116,20 @@ function setupScheduleModal() {
     const dateInput = document.getElementById('scheduleDateInput');
     const dateChips = document.querySelectorAll('.chip-date');
     const timeSlotsContainer = document.querySelector('.chip-row-time');
+    const patternStartInput = document.getElementById('patternStartTime');
+    const patternEndInput = document.getElementById('patternEndTime');
+    const patternLengthInput = document.getElementById('patternSlotLength');
+    const applySlotPatternBtn = document.getElementById('applySlotPatternBtn');
 
     if (!scheduleDisplay || !modal || !confirmBtn || !dateInputHidden || !timeSlotHidden || !dateInput || !timeSlotsContainer) {
         return;
     }
 
     function openModal() {
-        const carId = document.getElementById('carId').value;
-        if (!carId) {
-            alert('Please select a car first before choosing a schedule.');
-            return;
-        }
+        // Allow opening the schedule modal even if no car/model is selected yet.
+        // Availability check will simply show all slots as available when no model is chosen.
         modal.classList.remove('hidden');
-        // Check availability if date is already set
+        // Check availability if date is already set and a model may be selected
         if (dateInput.value) {
             checkAvailability();
         }
@@ -1382,10 +1149,11 @@ function setupScheduleModal() {
         dateEl.min = todayStr;
     }
 
-    // Helper to build time slot chips from ALL_TIME_SLOTS
-    function buildTimeChips() {
+    // Helper to build time slot chips for a given date
+    function buildTimeChipsForDate(dateStr) {
+        const slots = getSlotsForDate(dateStr);
         timeSlotsContainer.innerHTML = '';
-        ALL_TIME_SLOTS.forEach((slot) => {
+        slots.forEach((slot) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'chip chip-time';
@@ -1396,10 +1164,22 @@ function setupScheduleModal() {
         });
     }
 
-    buildTimeChips();
-
-    // Init date input with today/min
+    // Init date input with today/min and build initial chips for today
     setToday(dateInput);
+    const todayStr = dateInput.value;
+    buildTimeChipsForDate(todayStr);
+
+    // Initialise pattern time inputs with sensible defaults if empty
+    if (patternStartInput && !patternStartInput.value) {
+        patternStartInput.value = DEFAULT_DAY_START;
+    }
+    if (patternEndInput && !patternEndInput.value) {
+        patternEndInput.value = DEFAULT_DAY_END;
+    }
+    if (patternLengthInput && !patternLengthInput.value) {
+        // 02:00 represents a 2 hour duration from midnight
+        patternLengthInput.value = '02:00';
+    }
 
     scheduleDisplay.addEventListener('click', openModal);
     scheduleDisplay.addEventListener('keydown', (e) => {
@@ -1422,6 +1202,7 @@ function setupScheduleModal() {
 
             if (mode === 'today') {
                 setToday(dateInput);
+                buildTimeChipsForDate(dateInput.value);
                 checkAvailability();
             } else if (mode === 'tomorrow') {
                 const today = new Date();
@@ -1433,6 +1214,7 @@ function setupScheduleModal() {
                 const tomorrowStr = `${yyyy}-${mm}-${dd}`;
                 dateInput.value = tomorrowStr;
                 dateInput.min = new Date().toISOString().split('T')[0];
+                buildTimeChipsForDate(tomorrowStr);
                 checkAvailability();
             } else {
                 // custom: just focus the date input
@@ -1442,7 +1224,35 @@ function setupScheduleModal() {
     });
 
     // Check availability when date changes
-    dateInput.addEventListener('change', checkAvailability);
+    dateInput.addEventListener('change', () => {
+        const dateStr = dateInput.value;
+        buildTimeChipsForDate(dateStr);
+        checkAvailability();
+    });
+
+    // Apply slot pattern (generate custom slots for this date)
+    if (applySlotPatternBtn) {
+        applySlotPatternBtn.addEventListener('click', () => {
+            const dateStr = dateInput.value;
+            if (!dateStr) {
+                alert('Please select a date first, then choose the slot length.');
+                return;
+            }
+
+            const dayStart = patternStartInput && patternStartInput.value ? patternStartInput.value : DEFAULT_DAY_START;
+            const dayEnd = patternEndInput && patternEndInput.value ? patternEndInput.value : DEFAULT_DAY_END;
+
+            let lenMinutes = 120;
+            if (patternLengthInput && patternLengthInput.value) {
+                // Treat the time input as a duration from 00:00 (e.g. 01:30 = 90 minutes)
+                lenMinutes = parseTimeToMinutes(patternLengthInput.value) || 120;
+            }
+
+            generateSlotsForDate(dateStr, lenMinutes, dayStart, dayEnd);
+            buildTimeChipsForDate(dateStr);
+            checkAvailability();
+        });
+    }
 
     // Time chips (delegate so it works after rebuilds)
     timeSlotsContainer.addEventListener('click', (e) => {
