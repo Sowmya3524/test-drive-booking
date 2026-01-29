@@ -48,22 +48,23 @@ function initializeEventListeners() {
         });
     }
 
-    // When consultant changes, clear any selected schedule and refresh availability for new consultant
+    // When consultant changes, refresh availability for new consultant (but keep the selected schedule)
     const consultantSelect = document.getElementById('consultantName');
     if (consultantSelect) {
         consultantSelect.addEventListener('change', function () {
-            // Clear previously chosen schedule
-            const bookingDateInput = document.getElementById('bookingDate');
-            const timeSlotInput = document.getElementById('timeSlot');
-            const scheduleText = document.getElementById('scheduleDisplayText');
-            if (bookingDateInput) bookingDateInput.value = '';
-            if (timeSlotInput) timeSlotInput.value = '';
-            if (scheduleText) scheduleText.textContent = 'Select schedule';
-
+            // Don't clear the schedule - just re-check availability for the new consultant
             // If schedule modal is open and a date is already set, re-run availability for new consultant
             const dateInput = document.getElementById('scheduleDateInput');
             if (dateInput && dateInput.value) {
                 checkAvailability();
+            }
+            
+            // Also check if there's already a selected schedule and validate consultant availability for it
+            const bookingDateInput = document.getElementById('bookingDate');
+            const timeSlotInput = document.getElementById('timeSlot');
+            if (bookingDateInput && bookingDateInput.value && timeSlotInput && timeSlotInput.value) {
+                // Schedule is already selected - check if new consultant is available for this slot
+                updateConsultantAvailability(bookingDateInput.value, timeSlotInput.value);
             }
         });
     }
@@ -333,7 +334,17 @@ function updateCarDisplay(carId) {
 const ALL_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'];
 
 // Custom slot patterns per date (YYYY-MM-DD -> ['HH:MM-HH:MM', ...])
-const customSlotsByDate = {};
+// Load from localStorage on init to persist patterns across page reloads
+let customSlotsByDate = {};
+try {
+    const stored = localStorage.getItem('customSlotsByDate');
+    if (stored) {
+        customSlotsByDate = JSON.parse(stored);
+    }
+} catch (e) {
+    console.warn('Could not load slot patterns from localStorage:', e);
+    customSlotsByDate = {};
+}
 
 // Default working hours for generated slots
 const DEFAULT_DAY_START = '09:00';
@@ -349,6 +360,26 @@ function slotStartMinutes(slot) {
     if (!slot) return 0;
     const [start] = slot.split('-');
     return parseTimeToMinutes(start);
+}
+
+// Helper: Parse a time slot string (e.g., "15:00-17:00") into start and end minutes
+function parseSlotToRange(slot) {
+    if (!slot || !slot.includes('-')) return null;
+    const [startStr, endStr] = slot.split('-');
+    const start = parseTimeToMinutes(startStr.trim());
+    const end = parseTimeToMinutes(endStr.trim());
+    return { start, end };
+}
+
+// Helper: Check if two time slots overlap
+function slotsOverlap(slot1, slot2) {
+    if (!slot1 || !slot2) return false;
+    const range1 = parseSlotToRange(slot1);
+    const range2 = parseSlotToRange(slot2);
+    if (!range1 || !range2) return false;
+    
+    // Two ranges overlap if: range1.start < range2.end AND range2.start < range1.end
+    return range1.start < range2.end && range2.start < range1.end;
 }
 
 function getSlotsForDate(dateStr) {
@@ -377,7 +408,15 @@ function generateSlotsForDate(dateStr, slotLengthMinutes, dayStartStr, dayEndStr
     }
 
     if (dateStr) {
+        // Store the pattern for this date
         customSlotsByDate[dateStr] = slots;
+        
+        // Persist to localStorage so patterns survive page reloads
+        try {
+            localStorage.setItem('customSlotsByDate', JSON.stringify(customSlotsByDate));
+        } catch (e) {
+            console.warn('Could not save slot patterns to localStorage:', e);
+        }
     }
 
     return slots;
@@ -1248,8 +1287,15 @@ function setupScheduleModal() {
                 lenMinutes = parseTimeToMinutes(patternLengthInput.value) || 120;
             }
 
+            // Generate and store the new slot pattern for this date
+            // This will overwrite any previous pattern for this date
             generateSlotsForDate(dateStr, lenMinutes, dayStart, dayEnd);
+            
+            // Rebuild the time chips with the new pattern
             buildTimeChipsForDate(dateStr);
+            
+            // Check availability - this will mark slots as unavailable if they overlap with existing bookings
+            // (e.g., if a car is booked for 2hr slot, overlapping 1hr slots will be marked unavailable)
             checkAvailability();
         });
     }
@@ -1408,17 +1454,9 @@ async function checkAvailability() {
 
         const bookings = await response.json();
 
-        // Count how many cars are booked per slot for this model
-        const slotBookingCounts = new Map(); // slot -> count
-        bookings.forEach((b) => {
-            if (!b.time_slot) return;
-            const current = slotBookingCounts.get(b.time_slot) || 0;
-            slotBookingCounts.set(b.time_slot, current + 1);
-        });
-
         // Also fetch bookings for the selected consultant on this date (any car)
         const consultantSelect = document.getElementById('consultantName');
-        let consultantBookedSlots = new Set();
+        let consultantBookings = [];
         if (consultantSelect && consultantSelect.value) {
             const consultant = encodeURIComponent(consultantSelect.value);
             const consResponse = await fetch(
@@ -1432,8 +1470,7 @@ async function checkAvailability() {
             );
 
             if (consResponse.ok) {
-                const consBookings = await consResponse.json();
-                consultantBookedSlots = new Set(consBookings.map((b) => b.time_slot));
+                consultantBookings = await consResponse.json();
             } else {
                 console.warn('Consultant availability check failed, falling back to model-only availability.');
             }
@@ -1443,8 +1480,8 @@ async function checkAvailability() {
 
         // Update time chips:
         // - disable if slot is in the past,
-        // - OR consultant is booked,
-        // - OR ALL cars of this model are booked for that slot.
+        // - OR consultant is booked in an overlapping slot,
+        // - OR ALL cars of this model are booked in overlapping slots.
         document.querySelectorAll('.chip-time').forEach((chip) => {
             const slot = chip.getAttribute('data-time-slot');
 
@@ -1456,20 +1493,30 @@ async function checkAvailability() {
                 return;
             }
 
-            if (consultantBookedSlots.has(slot)) {
+            // Check if consultant is booked in any overlapping slot
+            const consultantHasOverlap = consultantBookings.some((b) => 
+                b.time_slot && slotsOverlap(b.time_slot, slot)
+            );
+            if (consultantHasOverlap) {
                 chip.disabled = true;
                 chip.classList.add('chip-booked');
                 chip.classList.remove('chip-selected');
-                chip.title = 'This consultant is already booked for this time';
+                chip.title = 'This consultant is already booked in an overlapping time slot';
                 return;
             }
 
-            const bookedCount = slotBookingCounts.get(slot) || 0;
+            // Count how many cars are booked in overlapping slots (not just exact matches)
+            const overlappingBookings = bookings.filter((b) => 
+                b.time_slot && slotsOverlap(b.time_slot, slot)
+            );
+            const bookedCarIds = new Set(overlappingBookings.map((b) => b.car_id));
+            const bookedCount = bookedCarIds.size;
+
             if (bookedCount >= totalCarsForModel) {
                 chip.disabled = true;
                 chip.classList.add('chip-booked');
                 chip.classList.remove('chip-selected');
-                chip.title = 'All cars of this model are already booked for this slot';
+                chip.title = 'All cars of this model are already booked in overlapping time slots';
             } else {
                 chip.disabled = false;
                 chip.classList.remove('chip-booked');
@@ -1521,11 +1568,9 @@ async function submitBooking() {
         const carIds = carsForModel.map((c) => c.id).filter((id) => typeof id === 'number' || typeof id === 'string');
         const idList = carIds.join(',');
 
-        // Fetch bookings for ALL cars of this model for this date + slot
+        // Fetch ALL bookings for this model on this date (to check for overlaps, not just exact matches)
         const conflictCheck = await fetch(
-            `${SUPABASE_URL}/rest/v1/bookings?car_id=in.(${idList})&booking_date=eq.${bookingDateVal}&time_slot=eq.${encodeURIComponent(
-                timeSlotVal
-            )}&select=car_id`,
+            `${SUPABASE_URL}/rest/v1/bookings?car_id=in.(${idList})&booking_date=eq.${bookingDateVal}&select=car_id,time_slot`,
             {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -1543,18 +1588,29 @@ async function submitBooking() {
             throw new Error(`Failed to check for conflicts: ${errorText}`);
         }
 
-        const conflicts = await conflictCheck.json();
-        const bookedCarIds = new Set(conflicts.map((row) => row.car_id));
+        const existingBookings = await conflictCheck.json();
+        
+        // Check for overlapping time slots (not just exact matches)
+        const overlappingBookings = existingBookings.filter((booking) => 
+            booking.time_slot && slotsOverlap(booking.time_slot, timeSlotVal)
+        );
+        
+        const bookedCarIds = new Set(overlappingBookings.map((row) => row.car_id));
 
-        // Pick the first physical car of this model that is NOT booked for this slot
+        // Pick the first physical car of this model that is NOT booked in an overlapping slot
         const freeCar = carsForModel.find((car) => !bookedCarIds.has(car.id));
 
         if (!freeCar) {
-            // All physical cars of this model are busy in this slot
+            // All physical cars of this model are busy in overlapping slots
             const anyCar = carsForModel[0];
             const modelLabel = `${anyCar.car_make} ${anyCar.car_model} (${anyCar.car_variant})`;
+            const overlappingSlots = overlappingBookings.map(b => b.time_slot).filter((v, i, a) => a.indexOf(v) === i).join(', ');
             alert(
-                `All ${carsForModel.length} cars of this model are already booked for ${timeSlotVal} on ${bookingDateVal}.\n\nModel: ${modelLabel}\n\nPlease choose a different time slot or car model.`
+                `All ${carsForModel.length} cars of this model are already booked in overlapping time slots on ${bookingDateVal}.\n\n` +
+                `Model: ${modelLabel}\n` +
+                `Requested slot: ${timeSlotVal}\n` +
+                `Conflicting slots: ${overlappingSlots}\n\n` +
+                `Please choose a different time slot or car model.`
             );
             document.getElementById('scheduleModal').classList.remove('hidden');
             return;
@@ -1562,13 +1618,13 @@ async function submitBooking() {
 
         assignedCarId = freeCar.id;
 
-        // Also ensure the selected consultant is not booked on ANY car for this date and slot
+        // Also ensure the selected consultant is not booked on ANY car for this date in overlapping slots
         const consultantName = document.getElementById('consultantName').value;
         if (consultantName) {
             const consultantConflict = await fetch(
                 `${SUPABASE_URL}/rest/v1/bookings?consultant_name=eq.${encodeURIComponent(
                     consultantName
-                )}&booking_date=eq.${bookingDateVal}&time_slot=eq.${encodeURIComponent(timeSlotVal)}&select=id`,
+                )}&booking_date=eq.${bookingDateVal}&select=id,time_slot`,
                 {
                     headers: {
                         apikey: SUPABASE_ANON_KEY,
@@ -1586,10 +1642,19 @@ async function submitBooking() {
                 throw new Error(`Failed to check consultant conflicts: ${errorText}`);
             }
 
-            const consultantConflicts = await consultantConflict.json();
-            if (consultantConflicts.length > 0) {
+            const consultantBookings = await consultantConflict.json();
+            // Check for overlapping slots (not just exact matches)
+            const overlappingConsultantBookings = consultantBookings.filter((booking) =>
+                booking.time_slot && slotsOverlap(booking.time_slot, timeSlotVal)
+            );
+            
+            if (overlappingConsultantBookings.length > 0) {
+                const conflictingSlots = overlappingConsultantBookings.map(b => b.time_slot).filter((v, i, a) => a.indexOf(v) === i).join(', ');
                 alert(
-                    'This consultant is already booked for this time slot on another car. Please choose a different consultant or slot.'
+                    `This consultant is already booked in overlapping time slots on ${bookingDateVal}.\n\n` +
+                    `Requested slot: ${timeSlotVal}\n` +
+                    `Conflicting slots: ${conflictingSlots}\n\n` +
+                    `Please choose a different consultant or time slot.`
                 );
                 document.getElementById('scheduleModal').classList.remove('hidden');
                 return;
