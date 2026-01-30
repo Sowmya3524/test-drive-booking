@@ -949,6 +949,77 @@ main {
     margin-bottom: 16px;
 }
 
+.filter-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.date-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.date-filter-label {
+    font-size: 0.9rem;
+    color: #cbd5fe;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.date-quick-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.date-quick-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.75);
+    color: #cbd5fe;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.date-quick-btn:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(96, 165, 250, 0.5);
+    color: #e5ecff;
+}
+
+.date-quick-btn-active {
+    background: rgba(37, 99, 235, 0.2);
+    border-color: #3b82f6;
+    color: #bfdbfe;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.availability-date-input {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: #ffffff;
+    color: #020617;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    min-width: 160px;
+}
+
+.availability-date-input:focus {
+    outline: none;
+    border-color: #60a5fa;
+    box-shadow:
+        0 0 0 1px rgba(37, 99, 235, 0.8),
+        0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
 .availability-filter-input {
     width: 100%;
     padding: 12px 16px;
@@ -975,6 +1046,21 @@ main {
         0 0 0 1px rgba(37, 99, 235, 0.8),
         0 0 0 4px rgba(37, 99, 235, 0.15);
     background: #ffffff;
+}
+
+@media (min-width: 768px) {
+    .filter-row {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .date-filter-group {
+        flex: 0 0 auto;
+    }
+    
+    .availability-filter-input {
+        flex: 1;
+    }
 }
 
 /* Make time inputs in the schedule modal very visible on dark background */
@@ -1258,6 +1344,15 @@ input[type="time"].availability-filter-input::-webkit-calendar-picker-indicator 
     gap: 6px;
     font-size: 0.75rem;
     color: #cbd5fe;
+}
+
+.booking-line-date {
+    color: #a78bfa;
+    font-weight: 500;
+}
+
+.booking-line-consultant {
+    color: #60a5fa;
 }
 
 .booking-line-location {

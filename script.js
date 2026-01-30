@@ -89,6 +89,57 @@ function initializeEventListeners() {
             }
         });
     }
+
+    // Date filter for availability table
+    const dateFilterInput = document.getElementById('availabilityDateFilter');
+    if (dateFilterInput) {
+        // Set default to today
+        const today = new Date().toISOString().split('T')[0];
+        dateFilterInput.value = today;
+        dateFilterInput.min = today; // Don't allow past dates
+
+        // Reload table when date changes
+        dateFilterInput.addEventListener('change', function() {
+            loadAvailabilityTable(this.value);
+        });
+    }
+
+    // Quick date buttons (Today, Tomorrow)
+    const dateFilterToday = document.getElementById('dateFilterToday');
+    const dateFilterTomorrow = document.getElementById('dateFilterTomorrow');
+    
+    if (dateFilterToday) {
+        dateFilterToday.addEventListener('click', function() {
+            const today = new Date().toISOString().split('T')[0];
+            if (dateFilterInput) {
+                dateFilterInput.value = today;
+                loadAvailabilityTable(today);
+            }
+            // Update button states
+            dateFilterToday.classList.add('date-quick-btn-active');
+            if (dateFilterTomorrow) dateFilterTomorrow.classList.remove('date-quick-btn-active');
+        });
+    }
+
+    if (dateFilterTomorrow) {
+        dateFilterTomorrow.addEventListener('click', function() {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            if (dateFilterInput) {
+                dateFilterInput.value = tomorrowStr;
+                loadAvailabilityTable(tomorrowStr);
+            }
+            // Update button states
+            dateFilterTomorrow.classList.add('date-quick-btn-active');
+            if (dateFilterToday) dateFilterToday.classList.remove('date-quick-btn-active');
+        });
+    }
+
+    // Set Today button as active by default
+    if (dateFilterToday) {
+        dateFilterToday.classList.add('date-quick-btn-active');
+    }
 }
 
 // Switch between booking page and manage cars page
@@ -452,7 +503,7 @@ function isSlotInPast(dateStr, slot) {
 }
 
 // Load and render availability table
-async function loadAvailabilityTable() {
+async function loadAvailabilityTable(selectedDate = null) {
     const loadingEl = document.getElementById('availabilityTableLoading');
     const contentEl = document.getElementById('availabilityTableContent');
     const emptyEl = document.getElementById('availabilityTableEmpty');
@@ -464,10 +515,25 @@ async function loadAvailabilityTable() {
     emptyEl.style.display = 'none';
 
     try {
-        // Fetch all upcoming bookings with car details (live test drives list)
-        const today = new Date().toISOString().split('T')[0];
+        // Determine which date to filter by
+        let filterDate = selectedDate;
+        if (!filterDate) {
+            const dateFilterInput = document.getElementById('availabilityDateFilter');
+            filterDate = dateFilterInput ? dateFilterInput.value : null;
+        }
+        
+        // If no date selected, default to today
+        if (!filterDate) {
+            filterDate = new Date().toISOString().split('T')[0];
+            const dateFilterInput = document.getElementById('availabilityDateFilter');
+            if (dateFilterInput) {
+                dateFilterInput.value = filterDate;
+            }
+        }
+
+        // Fetch bookings for the selected date
         const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/bookings?booking_date=gte.${today}&select=id,booking_date,time_slot,consultant_name,test_drive_type,customer_location,car_id,cars!inner(car_make,car_model,car_variant,vin)&order=booking_date,time_slot,car_id`,
+            `${SUPABASE_URL}/rest/v1/bookings?booking_date=eq.${filterDate}&select=id,booking_date,time_slot,consultant_name,test_drive_type,customer_location,car_id,cars!inner(car_make,car_model,car_variant,vin)&order=time_slot,car_id`,
             {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -485,7 +551,7 @@ async function loadAvailabilityTable() {
         // Store bookings globally for filtering
         allBookingsData = bookings || [];
 
-        // Check if there's an active filter
+        // Check if there's an active search filter
         const filterInput = document.getElementById('carAvailabilityFilter');
         const activeFilter = filterInput ? filterInput.value.trim() : '';
 
@@ -538,7 +604,21 @@ function renderAvailabilityTable(bookings) {
             slotSet.add(b.time_slot);
         }
     });
-    const slots = Array.from(slotSet).sort((a, b) => slotStartMinutes(a) - slotStartMinutes(b));
+    // Sort slots: first by start time, then by end time (shorter slots first if same start)
+    const slots = Array.from(slotSet).sort((a, b) => {
+        const startA = slotStartMinutes(a);
+        const startB = slotStartMinutes(b);
+        if (startA !== startB) {
+            return startA - startB; // Sort by start time
+        }
+        // If same start time, sort by end time (shorter slots first)
+        const rangeA = parseSlotToRange(a);
+        const rangeB = parseSlotToRange(b);
+        if (rangeA && rangeB) {
+            return rangeA.end - rangeB.end; // Shorter duration first
+        }
+        return 0;
+    });
 
     // Group bookings by MODEL (make + model + variant)
     const modelMap = new Map(); // modelKey -> { key, label }
@@ -636,6 +716,17 @@ function renderAvailabilityTable(bookings) {
                         const location = booking.customer_location || '—';
                         const typeLabel = booking.test_drive_type === 'home' ? 'Home' : 'Branch';
                         const vin = (booking.cars && booking.cars.vin) || `Car ID ${booking.car_id}`;
+                        
+                        // Format booking date
+                        let dateDisplay = '—';
+                        if (booking.booking_date) {
+                            const dateObj = new Date(booking.booking_date + 'T00:00:00');
+                            dateDisplay = dateObj.toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                            });
+                        }
 
                         return `
                             <div class="booking-line">
@@ -644,6 +735,7 @@ function renderAvailabilityTable(bookings) {
                                     <span class="booking-line-type">${typeLabel}</span>
                                 </div>
                                 <div class="booking-line-body">
+                                    <span class="booking-line-date">📅 ${dateDisplay}</span>
                                     <span class="booking-line-consultant">👤 ${consultant}</span>
                                     <span class="booking-line-location" title="${location}">📍 ${
                                         location.length > 25 ? `${location.substring(0, 25)}...` : location

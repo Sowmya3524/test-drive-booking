@@ -148,13 +148,27 @@
                             <p class="car-display-subtitle">Booked time slots by date</p>
                         </div>
                         <div class="availability-filter-section">
-                            <input 
-                                type="text" 
-                                id="carAvailabilityFilter" 
-                                class="availability-filter-input" 
-                                placeholder="🔍 Search by car name (e.g., Mercedes C-Class, Hyundai Creta)"
-                                autocomplete="off"
-                            />
+                            <div class="filter-row">
+                                <div class="date-filter-group">
+                                    <label for="availabilityDateFilter" class="date-filter-label">📅 Filter by Date:</label>
+                                    <div class="date-quick-buttons">
+                                        <button type="button" class="date-quick-btn" id="dateFilterToday" data-date-mode="today">Today</button>
+                                        <button type="button" class="date-quick-btn" id="dateFilterTomorrow" data-date-mode="tomorrow">Tomorrow</button>
+                                    </div>
+                                    <input 
+                                        type="date" 
+                                        id="availabilityDateFilter" 
+                                        class="availability-date-input"
+                                    />
+                                </div>
+                                <input 
+                                    type="text" 
+                                    id="carAvailabilityFilter" 
+                                    class="availability-filter-input" 
+                                    placeholder="🔍 Search by car name (e.g., Mercedes C-Class, Hyundai Creta)"
+                                    autocomplete="off"
+                                />
+                            </div>
                         </div>
                         <div class="availability-table-container">
                             <div id="availabilityTableLoading" class="table-loading">
